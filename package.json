@@ -14,6 +14,7 @@
     "clsx": "^2.1.1",
     "i18next": "^25.8.4",
     "lucide-react": "^0.563.0",
+    "octokit": "^5.0.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.5.4",
