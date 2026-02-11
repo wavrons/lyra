@@ -53,12 +53,28 @@ export function Dashboard() {
     if (!newTripTitle.trim()) return;
 
     try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      console.log('[Dashboard] session for insert:', {
+        hasSession: !!currentSession,
+        userId: currentSession?.user?.id,
+        tokenType: currentSession?.token_type,
+        tokenPreview: currentSession?.access_token?.slice(0, 30) + '…',
+      });
+
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       console.log('[Dashboard] getUser result:', { userId: user?.id, userError });
       if (!user) {
         setError('Not authenticated — please log in again.');
         return;
       }
+
+      // Debug: check what token supabase-js is actually sending
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      console.log('[Dashboard] token being used:', {
+        hasAccessToken: !!sess?.access_token,
+        tokenStart: sess?.access_token?.slice(0, 40),
+        tokenLength: sess?.access_token?.length,
+      });
 
       const { data, error } = await supabase
         .from('trips')
