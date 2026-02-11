@@ -17,6 +17,7 @@ export function Dashboard() {
   const [newTripTitle, setNewTripTitle] = useState('');
   const [shareTripId, setShareTripId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchTrips();
@@ -24,11 +25,20 @@ export function Dashboard() {
 
   const fetchTrips = async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('[Dashboard] session check:', { 
+        hasSession: !!session, 
+        userId: session?.user?.id,
+        expiresAt: session?.expires_at,
+        tokenPreview: session?.access_token?.slice(0, 20) + '…',
+      });
+
       const { data, error } = await supabase
         .from('trips')
         .select('*')
         .order('created_at', { ascending: false });
 
+      console.log('[Dashboard] fetchTrips result:', { count: data?.length, error });
       if (error) throw error;
       setTrips(data || []);
     } catch (error) {
@@ -43,8 +53,12 @@ export function Dashboard() {
     if (!newTripTitle.trim()) return;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      console.log('[Dashboard] getUser result:', { userId: user?.id, userError });
+      if (!user) {
+        setError('Not authenticated — please log in again.');
+        return;
+      }
 
       const { data, error } = await supabase
         .from('trips')
@@ -55,14 +69,17 @@ export function Dashboard() {
         .select()
         .single();
 
+      console.log('[Dashboard] insert result:', { data, error });
       if (error) throw error;
       if (data) {
         setTrips([data, ...trips]);
         setNewTripTitle('');
         setIsCreating(false);
       }
-    } catch (error) {
-      console.error('Error creating trip:', error);
+    } catch (err: any) {
+      const msg = err?.message || err?.details || JSON.stringify(err);
+      console.error('Error creating trip:', err);
+      setError(`Failed to create trip: ${msg}`);
     }
   };
 
@@ -84,6 +101,11 @@ export function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
+      {error && (
+        <div className="mb-4 rounded-lg p-3 text-sm" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+          {error}
+        </div>
+      )}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-main)' }}>{t('dashboard.title')}</h1>
         <Button onClick={() => setIsCreating(!isCreating)}>
