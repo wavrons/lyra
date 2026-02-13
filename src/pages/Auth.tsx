@@ -101,11 +101,7 @@ export function Auth({ onAuth }: AuthProps) {
         <h1 className="mb-2 text-center text-3xl font-bold" style={{ color: 'var(--text-main)' }}>
           {t('app.title')}
         </h1>
-        <p className="mb-6 text-center" style={{ color: 'var(--text-muted)' }}>
-          {mode === 'login' && t('auth.login')}
-          {mode === 'signup' && t('auth.createAccount')}
-          {mode === 'forgot' && t('auth.forgotPassword')}
-        </p>
+        <div className="mb-6" />
 
         {message && (
           <div className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
