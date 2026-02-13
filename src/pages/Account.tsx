@@ -540,7 +540,8 @@ export function Account() {
   };
 
   const copyCode = async (code: string) => {
-    const url = `${window.location.origin}/?code=${code}`;
+    const base = import.meta.env.BASE_URL || '/';
+    const url = `${window.location.origin}${base}#/auth?code=${code}`;
     try {
       await navigator.clipboard.writeText(url);
       showToast('success', 'Invite link copied.', 'invite');
