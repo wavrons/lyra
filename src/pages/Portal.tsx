@@ -87,9 +87,6 @@ export function Portal() {
           <Button variant="secondary" size="sm" onClick={() => window.open(getGoogleMapsSearchUrl(mapsQuery), '_blank')}>
             Open in Google Maps
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => window.print()}>
-            Save as PDF
-          </Button>
         </div>
       </div>
 

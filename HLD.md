@@ -121,3 +121,99 @@ The "Public Link" Logic:
     </section>
   </main>
 </div>
+
+---
+<div class="public-portal" data-theme="tokyo"> <header class="hero">
+    <div class="hero-overlay">
+      <h1 class="trip-title">2026 Tokyo</h1>
+      <p class="trip-meta">7 Days • 12 Places</p>
+    </div>
+  </header>
+
+  <section class="logistics-bar">
+    <div class="log-item"><span>Flight</span> NH824</div>
+    <div class="log-item"><span>Stay</span> Park Hyatt</div>
+  </section>
+
+  <main class="itinerary-feed">
+    
+    <article class="day-block">
+      <h2 class="day-label">Day 1 <small>Oct 12</small></h2>
+      
+      <div class="poi-card">
+        <div class="poi-time">10:00 AM</div>
+        <div class="poi-content">
+          <img src="shibuya.jpg" alt="Shibuya Crossing" class="poi-img">
+          <h3>Shibuya Crossing</h3>
+          <p>The world's busiest intersection. Great for photos.</p>
+          <a href="#" class="map-link">Open in Maps</a>
+        </div>
+      </div>
+
+    </article>
+  </main>
+
+  <footer class="portal-footer">
+    <button class="cta-primary">Download PDF</button>
+  </footer>
+</div>
+---
+.public-portal {
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  font-weight: var(--font-weight);
+  letter-spacing: var(--letter-spacing);
+  min-height: 100vh;
+}
+
+/* Header adapts from Brutalist to Organic */
+.hero {
+  height: 40vh;
+  display: flex;
+  align-items: flex-end;
+  padding: 2rem;
+  background: linear-gradient(transparent, var(--bg-surface)), url('cover.jpg');
+}
+
+.trip-title {
+  font-size: 3rem;
+  text-transform: uppercase;
+  border-left: 8px solid var(--accent); /* Accent used as a strike-line */
+  padding-left: 1rem;
+}
+
+/* Logistics Bar: Small, high-density info */
+.logistics-bar {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--primary-cta);
+}
+
+/* The Cards: This is where --radius shines */
+.poi-card {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: rgba(128, 128, 128, 0.05); /* Subtle contrast */
+  border-radius: var(--radius);
+}
+
+.poi-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.cta-primary {
+  background-color: var(--primary-cta);
+  color: #fff;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  width: 100%;
+}

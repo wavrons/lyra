@@ -47,7 +47,6 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
   const [publishing, setPublishing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [flexDays, setFlexDays] = useState(7);
-  const [receiptDraft, setReceiptDraft] = useState({ title: '', url: '' });
 
   const portalUrl = useMemo(() => {
     if (!portal?.token) return '';
@@ -334,27 +333,6 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
     })();
   }, [id]);
 
-  const addReceipt = async () => {
-    if (!id) return;
-    const title = receiptDraft.title.trim();
-    const url = receiptDraft.url.trim();
-    if (!url) return;
-
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
-    if (!userId) return;
-
-    const { data } = await supabase
-      .from('trip_attachments')
-      .insert({ trip_id: id, user_id: userId, title: title || 'Receipt', url, kind: 'receipt' })
-      .select('*')
-      .single();
-    if (data) {
-      setAttachments([data as TripAttachment, ...attachments]);
-      setReceiptDraft({ title: '', url: '' });
-      if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
-    }
-  };
 
   if (loading) return null;
 
@@ -548,51 +526,6 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
             })}
           </div>
 
-          <div className="mt-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-              Receipts (Document Vault)
-            </div>
-            <div className="mb-2 flex gap-2">
-              <input
-                className="w-full rounded-lg border px-2 py-1 text-sm"
-                style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }}
-                placeholder="Title (optional)"
-                value={receiptDraft.title}
-                onChange={(e) => setReceiptDraft({ ...receiptDraft, title: e.target.value })}
-              />
-              <input
-                className="w-full rounded-lg border px-2 py-1 text-sm"
-                style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }}
-                placeholder="Receipt URL"
-                value={receiptDraft.url}
-                onChange={(e) => setReceiptDraft({ ...receiptDraft, url: e.target.value })}
-              />
-              <Button size="sm" onClick={() => void addReceipt()}>
-                Add
-              </Button>
-            </div>
-            {attachments.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-center text-xs" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-                No receipts yet.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {attachments.map((a) => (
-                  <div key={a.id} className="rounded-xl p-3" style={{ border: '1px solid var(--border-color)' }}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{a.title}</div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.kind}</div>
-                      </div>
-                      <a href={a.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
-                        View
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

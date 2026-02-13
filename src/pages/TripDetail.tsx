@@ -7,7 +7,7 @@ import { Input } from '../components/Input';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { RefreshBanner } from '../components/RefreshBanner';
 import { useTripVersionPoll } from '../hooks/useTripVersionPoll';
-import { supabase, type Trip, type TripItem } from '../lib/supabase';
+import { supabase, type Trip, type TripAttachment, type TripItem } from '../lib/supabase';
 
 export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
@@ -16,6 +16,8 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   
   const [trip, setTrip] = useState<Trip | null>(null);
   const [items, setItems] = useState<TripItem[]>([]);
+  const [attachments, setAttachments] = useState<TripAttachment[]>([]);
+  const [receiptDraft, setReceiptDraft] = useState({ title: '', url: '' });
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [draft, setDraft] = useState({
@@ -51,6 +53,13 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
 
       if (itemsError) throw itemsError;
       setItems(itemsData || []);
+
+      const { data: attData } = await supabase
+        .from('trip_attachments')
+        .select('*')
+        .eq('trip_id', tripId)
+        .order('created_at', { ascending: false });
+      setAttachments((attData as TripAttachment[]) ?? []);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -101,6 +110,59 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
     } catch (error) {
       console.error('Error adding item:', error);
       setErrorMsg('Failed to add item. You might only have viewer access.');
+    }
+  };
+
+  const updatePortalReceiptsSnapshot = async (tripId: string, tripTitle: string, nextAttachments: TripAttachment[]) => {
+    const { data: portalRows } = await supabase
+      .from('trip_portals')
+      .select('token, published')
+      .eq('trip_id', tripId)
+      .eq('published', true)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const token = Array.isArray(portalRows) && portalRows.length ? (portalRows[0] as any).token : null;
+    if (!token) return;
+
+    const { data: snapData } = await supabase
+      .from('trip_portal_snapshots')
+      .select('trip_title, payload')
+      .eq('token', token)
+      .maybeSingle();
+
+    const prevPayload = (snapData as any)?.payload ?? {};
+    const receipts = nextAttachments.map((a) => ({ id: a.id, title: a.title, url: a.url, kind: a.kind }));
+    const nextPayload = { ...prevPayload, receipts };
+
+    await supabase
+      .from('trip_portal_snapshots')
+      .upsert({ token, trip_title: (snapData as any)?.trip_title ?? tripTitle, payload: nextPayload }, { onConflict: 'token' });
+  };
+
+  const addReceipt = async () => {
+    if (!id) return;
+    const title = receiptDraft.title.trim();
+    const url = receiptDraft.url.trim();
+    if (!url) return;
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) return;
+
+      const { data, error } = await supabase
+        .from('trip_attachments')
+        .insert({ trip_id: id, user_id: userId, title: title || 'Receipt', url, kind: 'receipt' })
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      const next = [data as TripAttachment, ...attachments];
+      setAttachments(next);
+      setReceiptDraft({ title: '', url: '' });
+      if (trip?.title) await updatePortalReceiptsSnapshot(id, trip.title, next);
+    } catch (e) {
+      setErrorMsg('Failed to add receipt. You might only have viewer access.');
     }
   };
 
@@ -196,6 +258,47 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       <div className="space-y-6">
+        <section>
+          <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Document Vault</h2>
+          <div className="mb-3 flex gap-2">
+            <Input
+              value={receiptDraft.title}
+              onChange={(e) => setReceiptDraft({ ...receiptDraft, title: e.target.value })}
+              placeholder="Title (optional)"
+            />
+            <Input
+              value={receiptDraft.url}
+              onChange={(e) => setReceiptDraft({ ...receiptDraft, url: e.target.value })}
+              placeholder="Receipt URL"
+            />
+            <Button type="button" onClick={() => void addReceipt()}>
+              Add
+            </Button>
+          </div>
+
+          {attachments.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+              No receipts yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {attachments.map((a) => (
+                <div key={a.id} className="rounded-xl p-3" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{a.title}</div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.kind}</div>
+                    </div>
+                    <a href={a.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
+                      View
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {grouped.map(([country, items]) => (
           <section key={country}>
             <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>{country}</h2>
