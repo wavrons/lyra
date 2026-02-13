@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, UserPlus, Trash2 } from 'lucide-react';
+import { SFPersonBadgePlus, SFTrashFill } from './SFSymbols';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Select } from './Select';
@@ -17,6 +17,7 @@ export function ShareModal({ tripId, onClose }: ShareModalProps) {
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     fetchMembers();
@@ -44,11 +45,23 @@ export function ShareModal({ tripId, onClose }: ShareModalProps) {
     setError('');
 
     try {
+      const normalizedEmail = newEmail.trim().toLowerCase();
+      const { data: exists, error: existsError } = await supabase.rpc('user_exists_by_email', {
+        target_email: normalizedEmail,
+      });
+
+      if (existsError) throw existsError;
+      if (!exists) {
+        setError('That email isn’t registered yet. Ask them to sign up first.');
+        setSharing(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('trip_members')
         .insert([{
           trip_id: tripId,
-          user_email: newEmail.trim(),
+          user_email: normalizedEmail,
           role
         }])
         .select()
@@ -62,12 +75,21 @@ export function ShareModal({ tripId, onClose }: ShareModalProps) {
       if (data) {
         setMembers([...members, data]);
         setNewEmail('');
+        setRole('viewer');
+        setAdding(false);
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSharing(false);
     }
+  };
+
+  const handleCancel = () => {
+    setAdding(false);
+    setNewEmail('');
+    setRole('viewer');
+    setError('');
   };
 
   const handleRemove = async (memberId: string) => {
@@ -85,65 +107,95 @@ export function ShareModal({ tripId, onClose }: ShareModalProps) {
   };
 
   return (
-    <div className="themed-modal__backdrop">
-      <div className="themed-modal__panel" style={{ maxWidth: 480 }}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold" style={{ color: 'var(--text-main)' }}>Share Trip</h2>
-          <button onClick={onClose} style={{ color: 'var(--text-muted)' }}>
-            <X className="h-5 w-5" />
+    <div className="share-modal__backdrop" role="presentation">
+      <div className="share-modal">
+        <div className="share-modal__header">
+          <div>
+            <p className="share-modal__eyebrow">Trip access</p>
+            <h2 className="share-modal__title">Share Trip</h2>
+          </div>
+          <button type="button" className="share-modal__close" onClick={onClose} aria-label="Close">
+            ×
           </button>
         </div>
 
-        <form onSubmit={handleShare} className="mb-6">
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                type="email"
-                required
-                placeholder="friend@example.com"
-                value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
-              />
-            </div>
-            <Select
-              value={role}
-              onChange={v => setRole(v as 'viewer' | 'editor')}
-              options={[
-                { value: 'viewer', label: 'Viewer' },
-                { value: 'editor', label: 'Editor' },
-              ]}
-            />
+        <div className="share-modal__list">
+          <div className="share-modal__list-header">
+            <h3>People with access</h3>
+            <button
+              type="button"
+              className="share-modal__icon-btn"
+              onClick={() => {
+                setAdding(true);
+                setError('');
+              }}
+              disabled={adding}
+              aria-label="Add collaborator"
+            >
+              +
+            </button>
           </div>
-          {error && <p className="mt-1 text-sm" style={{ color: '#ef4444' }}>{error}</p>}
-          <Button type="submit" className="mt-2 w-full" disabled={sharing}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Invite
-          </Button>
-        </form>
 
-        <div>
-          <h3 className="mb-2 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Access List</h3>
           {loading ? (
-            <div className="h-6" />
-          ) : members.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No one else has access.</p>
+            <div className="share-modal__skeleton" />
           ) : (
-            <div className="space-y-2">
-              {members.map(member => (
-                <div key={member.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <div className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>{member.user_email}</div>
-                    <div className="text-xs capitalize" style={{ color: 'var(--text-muted)' }}>{member.role}</div>
+            <>
+              <ul className="share-modal__people" aria-live="polite">
+                {members.length === 0 ? (
+                  <li className="share-modal__empty-row">
+                    <span className="share-modal__empty">No one else has access.</span>
+                  </li>
+                ) : (
+                  members.map(member => (
+                    <li key={member.id} className="share-modal__person">
+                      <div>
+                        <span className="share-modal__email">{member.user_email}</span>
+                        <span className="share-modal__role-chip">{member.role}</span>
+                      </div>
+                      <Button variant="danger" size="sm" onClick={() => handleRemove(member.id)}>
+                        <SFTrashFill size={16} />
+                      </Button>
+                    </li>
+                  ))
+                )}
+              </ul>
+
+              {adding && (
+                <form onSubmit={handleShare} className="share-modal__new-row">
+                  <div className="share-modal__new-row-grid">
+                    <Input
+                      type="email"
+                      required
+                      placeholder="friend@example.com"
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                      className="share-modal__input"
+                    />
+                    <Select
+                      value={role}
+                      onChange={v => setRole(v as 'viewer' | 'editor')}
+                      options={[
+                        { value: 'viewer', label: 'Viewer' },
+                        { value: 'editor', label: 'Editor' },
+                      ]}
+                      className="share-modal__select"
+                    />
                   </div>
-                  <button 
-                    onClick={() => handleRemove(member.id)}
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+
+                  {error && <p className="share-modal__error">{error}</p>}
+
+                  <div className="share-modal__form-actions">
+                    <Button type="button" variant="secondary" size="sm" onClick={handleCancel}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" size="sm" disabled={sharing} className="share-modal__submit">
+                      <SFPersonBadgePlus size={16} className="mr-2" />
+                      {sharing ? 'Saving…' : 'Save'}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </>
           )}
         </div>
       </div>

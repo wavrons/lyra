@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Plus, Trash2, ArrowLeft } from 'lucide-react';
+import { SFTrashFill } from '../components/SFSymbols';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -137,13 +137,13 @@ export function TripDetail() {
       <RefreshBanner visible={stale} onRefresh={handleRefresh} />
       <div className="mb-6">
         <Button variant="secondary" size="sm" onClick={() => navigate('/dashboard')} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><polyline points="15 18 9 12 15 6"/></svg>
           Back to Dashboard
         </Button>
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>{trip.title}</h1>
           <Button onClick={() => setIsFormOpen(!isFormOpen)}>
-            <Plus className="mr-2 h-4 w-4" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             {t('tripPlanner.addPOI')}
           </Button>
         </div>
@@ -198,7 +198,7 @@ export function TripDetail() {
                   <div className="mb-2 flex justify-between">
                     <h3 className="font-semibold">{item.name}</h3>
                     <Button variant="danger" size="sm" onClick={() => setPendingDeleteItemId(item.id)}>
-                      <Trash2 className="h-4 w-4" />
+                      <SFTrashFill size={16} />
                     </Button>
                   </div>
                   {item.link && (

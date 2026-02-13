@@ -1,5 +1,22 @@
 import { useState, useCallback } from 'react';
-import { Link2, Loader2 } from 'lucide-react';
+const LinkIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 4" />
+    <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07L13 20" />
+  </svg>
+);
+const LoaderIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="12" y1="2" x2="12" y2="6" />
+    <line x1="12" y1="18" x2="12" y2="22" />
+    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+    <line x1="2" y1="12" x2="6" y2="12" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+  </svg>
+);
 import { Button } from './Button';
 import { Input } from './Input';
 import { parseUrl, looksLikeUrl, normalizeUrl, type OGData } from '../lib/ogParse';
@@ -74,7 +91,7 @@ export function BoardPasteInput({ onParsed, onNote, disabled }: BoardPasteInputP
   return (
     <div className="board-paste-input">
       <div className="board-paste-input__row">
-        <Link2 className="h-4 w-4 board-paste-input__icon" />
+        <LinkIcon className="h-4 w-4 board-paste-input__icon" />
         <Input
           value={value}
           onChange={e => { setValue(e.target.value); setError(''); }}
@@ -89,7 +106,7 @@ export function BoardPasteInput({ onParsed, onNote, disabled }: BoardPasteInputP
           onClick={() => void handleSubmit()}
           disabled={disabled || parsing || !value.trim()}
         >
-          {parsing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
+          {parsing ? <LoaderIcon className="h-4 w-4 animate-spin" /> : 'Add'}
         </Button>
       </div>
       {error && <p className="board-paste-input__error">{error}</p>}

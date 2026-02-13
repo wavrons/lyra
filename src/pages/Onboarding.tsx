@@ -1,40 +1,123 @@
-import { useState } from 'react';
-import { Shield, Lock, Eye, EyeOff, Server, Key, Fingerprint, Globe } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  SFGlobe,
+  SFLockFill,
+  SFEyeSlashCircle,
+  SFNosign,
+  SFShield,
+  SFKey,
+  SFFingerprint,
+  SFServer,
+} from '../components/SFSymbols';
 import { supabase } from '../lib/supabase';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 
-const CITY_THEMES: { key: string; label: string; labelZh: string }[] = [
+const CITY_THEMES: { key: string; label: string; labelZh: string; adminOnly?: boolean; hidden?: boolean }[] = [
   { key: 'taipei',      label: 'Taipei',          labelZh: '台北' },
   { key: 'rio',         label: 'Rio de Janeiro',   labelZh: '里約' },
   { key: 'los_angeles', label: 'Los Angeles',      labelZh: '洛杉磯' },
   { key: 'amsterdam',   label: 'Amsterdam',        labelZh: '阿姆斯特丹' },
   { key: 'tokyo',       label: 'Tokyo',            labelZh: '東京' },
   { key: 'seoul',       label: 'Seoul',            labelZh: '首爾' },
-  { key: 'santorini',   label: 'Santorini',        labelZh: '聖托里尼' },
-  { key: 'arjeplog',    label: 'Arjeplog',         labelZh: '阿爾耶普盧格' },
+  { key: 'santorini',   label: 'Santorini',        labelZh: '聖托里尼', hidden: true },
+  { key: 'arjeplog',    label: 'Arjeplog',         labelZh: '阿爾耶普盧格', adminOnly: true },
 ];
 
 type Step = 'welcome' | 'name' | 'privacy' | 'theme';
 
 interface OnboardingProps {
-  userId: string;
+  userId?: string;
   onComplete: (themeKey: string, themeLabel: string) => void;
+  persist?: boolean;
+  onExit?: () => void;
+  prefillName?: string;
+  isPreview?: boolean;
+  forceIsAdmin?: boolean;
 }
 
-export function Onboarding({ userId, onComplete }: OnboardingProps) {
+export function Onboarding({
+  userId,
+  onComplete,
+  persist = true,
+  onExit,
+  prefillName,
+  isPreview,
+  forceIsAdmin,
+}: OnboardingProps) {
+  const initialThemeKey = 'taipei';
+  const initialThemeLabel = CITY_THEMES.find((theme) => theme.key === initialThemeKey)?.label ?? 'Taipei';
   const [step, setStep] = useState<Step>('welcome');
-  const [displayName, setDisplayName] = useState('');
+  const [displayName, setDisplayName] = useState(prefillName ?? '');
+
+  const isCjk = (value: string) => /[\u3400-\u9FFF\uF900-\uFAFF]/.test(value);
+  const getAvatarLabel = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return '?';
+    if (isCjk(trimmed)) {
+      const chars = Array.from(trimmed.replace(/\s+/g, ''));
+      return chars.length ? chars[chars.length - 1] : '?';
+    }
+    const letters = trimmed.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (!letters) return '?';
+    return letters.slice(0, 2);
+  };
   const [saving, setSaving] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(initialThemeKey);
+  const previousThemeRef = useRef<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(forceIsAdmin ?? false);
+
+  useEffect(() => {
+    previousThemeRef.current = document.documentElement.getAttribute('data-theme');
+    document.documentElement.setAttribute('data-theme', initialThemeKey);
+    return () => {
+      if (previousThemeRef.current) {
+        document.documentElement.setAttribute('data-theme', previousThemeRef.current);
+      }
+    };
+  }, [initialThemeKey]);
+
+  useEffect(() => {
+    if (forceIsAdmin !== undefined) {
+      setIsAdmin(forceIsAdmin);
+      return;
+    }
+    let mounted = true;
+    const checkAdmin = async () => {
+      const { data } = await supabase.rpc('is_admin');
+      if (mounted) setIsAdmin(!!data);
+    };
+    void checkAdmin();
+    return () => {
+      mounted = false;
+    };
+  }, [forceIsAdmin]);
+
+  useEffect(() => {
+    if (!selectedTheme) return;
+    document.documentElement.setAttribute('data-theme', selectedTheme);
+  }, [selectedTheme]);
 
   // ── Step 1: Welcome (Taipei loading screen + tap to start) ──
   if (step === 'welcome') {
     return (
       <div className="onboarding-welcome" onClick={() => setStep('name')}>
+        {onExit && (
+          <button
+            type="button"
+            className="onboarding-close"
+            onClick={(event) => {
+              event.stopPropagation();
+              onExit();
+            }}
+          >
+            <SFNosign size={18} />
+            <span>Close</span>
+          </button>
+        )}
         <div className="onboarding-welcome__content">
           <div className="onboarding-welcome__kicker">Welcome to</div>
-          <div className="onboarding-welcome__city">Taipei</div>
+          <div className="onboarding-welcome__city">{initialThemeLabel}</div>
           <button className="onboarding-welcome__tap">Tap to start</button>
         </div>
       </div>
@@ -43,25 +126,49 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
 
   // ── Step 2: Display name ──
   if (step === 'name') {
+    const avatarText = getAvatarLabel(displayName);
     return (
       <div className="onboarding-step">
-        <div className="onboarding-card">
-          <h2 className="onboarding-card__title">How should we address you?</h2>
-          <p className="onboarding-card__subtitle">This will be your display name across the app.</p>
-          <Input
-            autoFocus
-            placeholder="Your name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            style={{ marginBottom: 20, fontSize: 16 }}
-          />
-          <Button
-            disabled={!displayName.trim()}
-            onClick={() => setStep('privacy')}
-            style={{ width: '100%' }}
+        {isPreview && (
+          <div className="onboarding-preview-label">Preview</div>
+        )}
+        {onExit && (
+          <button type="button" className="onboarding-close" onClick={onExit}>
+            <SFNosign size={18} />
+            <span>Close</span>
+          </button>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div className="onboarding-live-avatar" aria-hidden>
+            {avatarText}
+          </div>
+          <form
+            className="onboarding-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!displayName.trim()) return;
+              setStep('privacy');
+            }}
           >
-            Continue
-          </Button>
+            <h2 className="onboarding-card__title">How should we address you?</h2>
+            <p className="onboarding-card__subtitle">
+              This will be your display name everywhere. You can update it later in Account &gt; Profile.
+            </p>
+            <Input
+              autoFocus
+              placeholder="Your name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              style={{ marginBottom: 20, fontSize: 16 }}
+            />
+            <Button
+              type="submit"
+              disabled={!displayName.trim()}
+              style={{ width: '100%' }}
+            >
+              Continue
+            </Button>
+          </form>
         </div>
       </div>
     );
@@ -71,80 +178,72 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
   if (step === 'privacy') {
     return (
       <div className="onboarding-step">
+        {onExit && (
+          <button type="button" className="onboarding-close" onClick={onExit}>
+            <SFNosign size={18} />
+            <span>Close</span>
+          </button>
+        )}
         <div className="onboarding-privacy">
-          {/* Header */}
           <div className="onboarding-privacy__header">
-            <div className="onboarding-privacy__icon-wrap">
-              <Shield className="onboarding-privacy__icon" />
+            <div className="onboarding-privacy__title-row">
+              <div className="onboarding-privacy__icon-wrap">
+                <SFShield className="onboarding-privacy__icon" />
+              </div>
+              <h2 className="onboarding-privacy__title">Your Data & Privacy</h2>
             </div>
-            <h2 className="onboarding-privacy__title">Your Data & Privacy</h2>
             <p className="onboarding-privacy__subtitle">
-              Before you continue, here's how we handle your information.
+              Before you continue, here's how we handle your information. You can change this anytime in Account &gt; Profile.
             </p>
           </div>
 
-          {/* Data items grid */}
           <div className="onboarding-privacy__grid">
             <div className="onboarding-privacy__item">
-              <Lock className="onboarding-privacy__item-icon" />
+              <SFLockFill className="onboarding-privacy__item-icon" />
               <div>
                 <strong>End-to-End Encryption</strong>
-                <span>All uploaded images are encrypted with AES-256-GCM before leaving your device. Not even we can read them.</span>
+                <span>Files are encrypted with AES-256-GCM before they ever leave your device.</span>
               </div>
             </div>
 
             <div className="onboarding-privacy__item">
-              <Key className="onboarding-privacy__item-icon" />
+              <SFKey className="onboarding-privacy__item-icon" />
               <div>
-                <strong>Per-Trip Encryption Keys</strong>
-                <span>Each trip derives its own unique encryption key via PBKDF2. Compromising one trip cannot expose another.</span>
+                <strong>Per-Trip Keys</strong>
+                <span>Every trip gets its own PBKDF2 key so one link can’t expose another.</span>
               </div>
             </div>
 
             <div className="onboarding-privacy__item">
-              <Fingerprint className="onboarding-privacy__item-icon" />
+              <SFFingerprint className="onboarding-privacy__item-icon" />
               <div>
                 <strong>Authentication</strong>
-                <span>Your account is secured by Supabase Auth. Sessions are stored locally and never shared.</span>
+                <span>Supabase Auth keeps sessions local—never shared with third parties.</span>
               </div>
             </div>
 
             <div className="onboarding-privacy__item">
-              <Server className="onboarding-privacy__item-icon" />
+              <SFServer className="onboarding-privacy__item-icon" />
               <div>
                 <strong>Private Storage</strong>
-                <span>Encrypted files are stored in a private GitHub repository. Raw data is unreadable without your secret key.</span>
+                <span>Encrypted files live in a private GitHub repo and need your secret key.</span>
               </div>
             </div>
 
             <div className="onboarding-privacy__item">
-              <EyeOff className="onboarding-privacy__item-icon" />
+              <SFEyeSlashCircle className="onboarding-privacy__item-icon" />
               <div>
                 <strong>No Tracking</strong>
-                <span>We don't use analytics, cookies, or any third-party tracking. Your usage stays on your device.</span>
+                <span>No analytics, cookies, or trackers. Your usage stays on your device.</span>
               </div>
             </div>
 
             <div className="onboarding-privacy__item">
-              <Globe className="onboarding-privacy__item-icon" />
+              <SFGlobe className="onboarding-privacy__item-icon" />
               <div>
                 <strong>Open Graph Parsing</strong>
-                <span>When you paste a URL, our edge function fetches metadata only — no content is stored server-side.</span>
+                <span>URL previews fetch metadata only—no page content is stored server-side.</span>
               </div>
-            </div>
-          </div>
-
-          {/* Not linked section — inspired by stellaride */}
-          <div className="onboarding-privacy__unlinked">
-            <Eye className="onboarding-privacy__unlinked-icon" />
-            <strong>Data not linked to you</strong>
-            <div className="onboarding-privacy__unlinked-grid">
-              <span>Location</span>
-              <span>Browsing history</span>
-              <span>Device ID</span>
-              <span>Contacts</span>
-              <span>Usage data</span>
-              <span>Diagnostics</span>
             </div>
           </div>
 
@@ -166,18 +265,24 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
     setSaving(true);
 
     try {
-      // Save display name + onboarded flag
-      await supabase.from('profiles').upsert({
-        user_id: userId,
-        display_name: displayName.trim(),
-        onboarded: true,
-      });
+      if (persist) {
+        if (!userId) {
+          setSaving(false);
+          return;
+        }
+        // Save display name + onboarded flag
+        await supabase.from('profiles').upsert({
+          user_id: userId,
+          display_name: displayName.trim(),
+          onboarded: true,
+        });
 
-      // Save theme
-      await supabase.from('user_settings').upsert({
-        user_id: userId,
-        city_theme: selectedTheme,
-      });
+        // Save theme
+        await supabase.from('user_settings').upsert({
+          user_id: userId,
+          city_theme: selectedTheme,
+        });
+      }
 
       const label = CITY_THEMES.find(t => t.key === selectedTheme)?.label ?? 'Taipei';
       onComplete(selectedTheme, label);
@@ -189,12 +294,18 @@ export function Onboarding({ userId, onComplete }: OnboardingProps) {
 
   return (
     <div className="onboarding-step">
+      {onExit && (
+        <button type="button" className="onboarding-close" onClick={onExit}>
+          <SFNosign size={18} />
+          <span>Close</span>
+        </button>
+      )}
       <div className="onboarding-card" style={{ maxWidth: 520 }}>
         <h2 className="onboarding-card__title">Pick your city</h2>
         <p className="onboarding-card__subtitle">This sets your app's look and feel. You can change it anytime.</p>
 
         <div className="onboarding-theme-grid">
-          {CITY_THEMES.map(theme => (
+          {CITY_THEMES.filter((theme) => (theme.adminOnly ? isAdmin : true) && !theme.hidden).map(theme => (
             <button
               key={theme.key}
               className="onboarding-theme-btn"

@@ -1,5 +1,30 @@
 import { useState, useRef, useCallback } from 'react';
-import { Upload, Loader2, ImageIcon } from 'lucide-react';
+const UploadIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+const LoaderIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="12" y1="2" x2="12" y2="6" />
+    <line x1="12" y1="18" x2="12" y2="22" />
+    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+    <line x1="2" y1="12" x2="6" y2="12" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+  </svg>
+);
+const ImageIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/bmp'];
@@ -95,15 +120,15 @@ export function ImageUpload({ onUpload, storageUsed, storageLimit, disabled }: I
         />
         {uploading ? (
           <div className="image-upload__status">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <LoaderIcon className="h-5 w-5 animate-spin" />
             <span>Encrypting & uploading… {progress}%</span>
           </div>
         ) : (
           <div className="image-upload__status">
             {dragOver ? (
-              <ImageIcon className="h-6 w-6" />
+              <ImageIcon className="h-5 w-5" />
             ) : (
-              <Upload className="h-6 w-6" />
+              <UploadIcon className="h-5 w-5" />
             )}
             <span>{dragOver ? 'Drop image here' : 'Drag & drop or click to upload'}</span>
           </div>

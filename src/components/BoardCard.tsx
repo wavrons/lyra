@@ -1,4 +1,4 @@
-import { Trash2, ExternalLink, Play } from 'lucide-react';
+import { SFTrashFill } from './SFSymbols';
 import { Button } from './Button';
 import { type BoardItem, type ColorTag, COLOR_TAG_OPTIONS } from '../lib/supabase';
 
@@ -6,6 +6,7 @@ interface BoardCardProps {
   item: BoardItem;
   onDelete: (id: string) => void;
   onTagChange: (id: string, tag: ColorTag) => void;
+  onOpen?: (item: BoardItem) => void;
 }
 
 function nextTag(current: ColorTag): ColorTag {
@@ -18,13 +19,30 @@ function tagHex(tag: ColorTag): string | undefined {
   return COLOR_TAG_OPTIONS.find(o => o.value === tag)?.hex;
 }
 
-export function BoardCard({ item, onDelete, onTagChange }: BoardCardProps) {
+export function BoardCard({ item, onDelete, onTagChange, onOpen }: BoardCardProps) {
   const hasThumb = !!item.thumbnail_url;
   const isVideo = item.type === 'video';
   const embedUrl = (item.source_meta as Record<string, unknown>)?.embed_url as string | undefined;
 
+  const clickable = typeof onOpen === 'function';
+
   return (
-    <div className="board-card">
+    <div
+      className="board-card"
+      onClick={() => {
+        if (!onOpen) return;
+        onOpen(item);
+      }}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!clickable) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen?.(item);
+        }
+      }}
+    >
       {/* Color tag dot — top-right corner */}
       <button
         className="board-card__tag-dot"
@@ -53,7 +71,9 @@ export function BoardCard({ item, onDelete, onTagChange }: BoardCardProps) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'rgba(0,0,0,0.25)', pointerEvents: 'none',
             }}>
-              <Play className="h-8 w-8" style={{ color: '#fff', opacity: 0.9 }} />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8" style={{ color: '#fff', opacity: 0.9 }}>
+                <polygon points="8 5 19 12 8 19" />
+              </svg>
             </div>
           )}
         </div>
@@ -76,15 +96,25 @@ export function BoardCard({ item, onDelete, onTagChange }: BoardCardProps) {
             href={item.url || embedUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
             style={{ marginRight: 'auto' }}
           >
-            <Button variant="secondary" size="sm">
-              <ExternalLink className="h-3 w-3" />
-            </Button>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
           </a>
         )}
-        <Button variant="danger" size="sm" onClick={() => onDelete(item.id)}>
-          <Trash2 className="h-3 w-3" />
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete(item.id);
+          }}
+        >
+          <SFTrashFill size={16} />
         </Button>
       </div>
     </div>

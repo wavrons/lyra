@@ -1,5 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+const ChevronDownIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
 
 interface SelectOption {
   value: string;
@@ -39,7 +43,7 @@ export function Select({ options, value, onChange, placeholder = 'Select…', cl
         <span className={selected ? 'themed-select__value' : 'themed-select__placeholder'}>
           {selected ? selected.label : placeholder}
         </span>
-        <ChevronDown className={`themed-select__chevron ${open ? 'themed-select__chevron--open' : ''}`} />
+        <ChevronDownIcon className={`themed-select__chevron ${open ? 'themed-select__chevron--open' : ''}`} />
       </button>
 
       {open && (

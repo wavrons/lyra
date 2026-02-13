@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, Layers, FolderOpen } from 'lucide-react';
 import { Button } from '../components/Button';
 import { BoardPasteInput } from '../components/BoardPasteInput';
 import { BoardCard } from '../components/BoardCard';
@@ -11,6 +10,23 @@ import { useTripVersionPoll } from '../hooks/useTripVersionPoll';
 import { supabase, type Trip, type BoardItem, type ColorTag } from '../lib/supabase';
 import { TRIP_STORAGE_LIMIT_BYTES } from '../config';
 import type { OGData } from '../lib/ogParse';
+
+// Inline icon components (SF-style)
+const ChevronLeft = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 18 9 12 15 6"/></svg>
+);
+const ChevronRight = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="9 18 15 12 9 6"/></svg>
+);
+const Clock = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+);
+const Layers = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+);
+const FolderOpen = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M1 10h22"/></svg>
+);
 
 type GroupBy = 'time' | 'type' | 'group';
 
@@ -30,6 +46,8 @@ export function Board() {
   const [groupBy, setGroupBy] = useState<GroupBy>('time');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<BoardItem | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
 
   const { stale, acknowledge } = useTripVersionPoll(id);
 
@@ -214,107 +232,229 @@ export function Board() {
     return Array.from(groups.entries());
   }, [items, groupBy]);
 
+  const previewUrl = useMemo(() => {
+    if (!previewItem) return null;
+    if (previewItem.url) return previewItem.url;
+
+    const meta = (previewItem.source_meta ?? null) as Record<string, unknown> | null;
+    const embedUrl = typeof meta?.embed_url === 'string' ? meta.embed_url : undefined;
+    if (embedUrl) return embedUrl;
+    const rawUrl = typeof meta?.raw_url === 'string' ? meta.raw_url : undefined;
+    if (rawUrl) return rawUrl;
+
+    const extractUrl = (value?: string | null) => {
+      if (!value) return null;
+      const match = value.match(/https?:\/\/[^\s)]+/i);
+      return match ? match[0] : null;
+    };
+
+    return extractUrl(previewItem.title) ?? extractUrl(previewItem.description);
+  }, [previewItem]);
+
+  const handleCardOpen = useCallback((item: BoardItem) => {
+    setPreviewItem(item);
+    setPreviewVisible(true);
+  }, []);
+
+  useEffect(() => {
+    if (!previewVisible) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPreviewVisible(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewVisible]);
+
+  const previewTitle = previewUrl ?? (previewItem?.title ?? 'Preview');
+  const previewOpen = previewVisible && !!previewItem;
+
   if (loading) return null;
   if (!trip) return <div className="p-6">Trip not found</div>;
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <RefreshBanner visible={stale} onRefresh={handleRefresh} />
+    <div className="mx-auto max-w-6xl p-6 board-page">
+      <div className="board-page__main">
+        <RefreshBanner visible={stale} onRefresh={handleRefresh} />
 
-      {/* Header */}
-      <div className="mb-6">
-        <Button variant="secondary" size="sm" onClick={() => navigate('/dashboard')} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Dashboard
-        </Button>
-        <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>{trip.title}</h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Board</p>
-      </div>
+        {/* Header */}
+        <div className="mb-6 flex flex-wrap items-center gap-4">
+          <Button variant="secondary" size="sm" onClick={() => navigate('/dashboard')} className="mb-4">
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Dashboard
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold" style={{ color: 'var(--text-main)' }}>{trip.title}</h1>
+            <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Board</p>
+          </div>
+        </div>
 
-      {/* Input area */}
-      <div className="mb-6 space-y-3">
-        <BoardPasteInput onParsed={handleParsed} onNote={handleNote} />
-        <ImageUpload
-          onUpload={handleImageUpload}
-          storageUsed={trip.storage_used_bytes ?? 0}
-          storageLimit={TRIP_STORAGE_LIMIT_BYTES}
+        {/* Input area */}
+        <div className="mb-6 space-y-3">
+          <BoardPasteInput onParsed={handleParsed} onNote={handleNote} />
+          <ImageUpload
+            onUpload={handleImageUpload}
+            storageUsed={trip.storage_used_bytes ?? 0}
+            storageLimit={TRIP_STORAGE_LIMIT_BYTES}
+          />
+        </div>
+
+        {/* Group-by toggle */}
+        <div className="mb-4 flex items-center gap-1">
+          <span className="mr-2 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Group by:</span>
+          {GROUP_BY_OPTIONS.map(opt => {
+            const Icon = opt.icon;
+            const active = groupBy === opt.value;
+            return (
+              <button
+                key={opt.value}
+                className="board-group-btn"
+                data-active={active || undefined}
+                onClick={() => setGroupBy(opt.value)}
+              >
+                <Icon className="h-3 w-3" />
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Board grid */}
+        {grouped.map(([label, groupItems]) => (
+          <section key={label} className="mb-6">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              {label}
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {groupItems.map(item => (
+                <BoardCard
+                  key={item.id}
+                  item={item}
+                  onDelete={(itemId) => setPendingDeleteId(itemId)}
+                  onTagChange={handleTagChange}
+                  onOpen={handleCardOpen}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {items.length === 0 && (
+          <div
+            className="rounded-xl border border-dashed p-12 text-center"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}
+          >
+            Paste a link, drop an image, or type a note to get started.
+          </div>
+        )}
+
+        {/* Delete confirmation */}
+        <ConfirmModal
+          open={!!pendingDeleteId}
+          title="Delete item?"
+          message="Are you sure you want to remove this from the board?"
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          variant="danger"
+          onConfirm={() => {
+            if (pendingDeleteId) void handleDelete(pendingDeleteId);
+            setPendingDeleteId(null);
+          }}
+          onCancel={() => setPendingDeleteId(null)}
+        />
+
+        {/* Error modal */}
+        <ConfirmModal
+          open={!!errorMsg}
+          title="Error"
+          message={errorMsg ?? ''}
+          confirmLabel="OK"
+          cancelLabel="Close"
+          variant="primary"
+          onConfirm={() => setErrorMsg(null)}
+          onCancel={() => setErrorMsg(null)}
         />
       </div>
 
-      {/* Group-by toggle */}
-      <div className="mb-4 flex items-center gap-1">
-        <span className="mr-2 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Group by:</span>
-        {GROUP_BY_OPTIONS.map(opt => {
-          const Icon = opt.icon;
-          const active = groupBy === opt.value;
-          return (
-            <button
-              key={opt.value}
-              className="board-group-btn"
-              data-active={active || undefined}
-              onClick={() => setGroupBy(opt.value)}
-            >
-              <Icon className="h-3 w-3" />
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Board grid */}
-      {grouped.map(([label, groupItems]) => (
-        <section key={label} className="mb-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-            {label}
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {groupItems.map(item => (
-              <BoardCard
-                key={item.id}
-                item={item}
-                onDelete={(itemId) => setPendingDeleteId(itemId)}
-                onTagChange={handleTagChange}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
-
-      {items.length === 0 && (
-        <div
-          className="rounded-xl border border-dashed p-12 text-center"
-          style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}
-        >
-          Paste a link, drop an image, or type a note to get started.
-        </div>
-      )}
-
-      {/* Delete confirmation */}
-      <ConfirmModal
-        open={!!pendingDeleteId}
-        title="Delete item?"
-        message="Are you sure you want to remove this from the board?"
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-        variant="danger"
-        onConfirm={() => {
-          if (pendingDeleteId) void handleDelete(pendingDeleteId);
-          setPendingDeleteId(null);
+      <button
+        type="button"
+        className="board-preview-toggle"
+        aria-label={previewOpen ? 'Hide preview' : previewItem ? 'Show preview' : 'Select a card to enable preview'}
+        data-open={previewOpen || undefined}
+        onClick={() => {
+          if (!previewItem) return;
+          setPreviewVisible(prev => !prev);
         }}
-        onCancel={() => setPendingDeleteId(null)}
-      />
+        disabled={!previewItem}
+      >
+        <ChevronRight className="board-preview-toggle__icon" />
+      </button>
 
-      {/* Error modal */}
-      <ConfirmModal
-        open={!!errorMsg}
-        title="Error"
-        message={errorMsg ?? ''}
-        confirmLabel="OK"
-        cancelLabel="Close"
-        variant="primary"
-        onConfirm={() => setErrorMsg(null)}
-        onCancel={() => setErrorMsg(null)}
-      />
+      {previewOpen && (
+        <aside className="side-browser side-browser--open" aria-hidden={false}>
+          <button
+            type="button"
+            className="side-browser__scrim"
+            aria-hidden="true"
+            onClick={() => setPreviewVisible(false)}
+          />
+          <div className="side-browser__panel" role="dialog" aria-label="Link preview">
+            <div className="side-browser__inner">
+              <div className="side-browser__header">
+                <div>
+                  <p className="side-browser__eyebrow">{previewItem?.type}</p>
+                  <h3 className="side-browser__title">{previewTitle}</h3>
+                </div>
+                <div className="side-browser__header-actions">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPreviewVisible(false)}
+                  >
+                    Close
+                  </Button>
+                  {previewUrl && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      Open tab
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    className="side-browser__close"
+                    onClick={() => setPreviewVisible(false)}
+                    aria-label="Close preview"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="side-browser__body">
+                {previewUrl ? (
+                  <iframe
+                    key={previewUrl}
+                    src={previewUrl}
+                    title={previewTitle}
+                    className="side-browser__frame"
+                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  />
+                ) : (
+                  <p className="side-browser__empty">
+                    This note doesn’t contain a link we can preview. Use the external link button instead.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </aside>
+      )}
     </div>
   );
 }
