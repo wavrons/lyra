@@ -283,34 +283,37 @@ export function Board() {
 
         {/* Breadcrumb Header */}
         <div className="board-page__header">
-          <div className="board-page__header-top">
-            <div className="board-page__breadcrumb">
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard')}
-                className="board-page__breadcrumb-link"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <ChevronLeft className="mr-1 h-4 w-4 inline" />
-                Dashboard
-              </button>
-              <span className="board-page__breadcrumb-sep">/</span>
-              <span className="board-page__breadcrumb-current" style={{ color: 'var(--text-main)' }}>
-                {trip.title}
-              </span>
+          <div className="board-page__header-inner">
+            <div className="board-page__header-top">
+              <div className="board-page__breadcrumb">
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard')}
+                  className="board-page__breadcrumb-link"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <ChevronLeft className="mr-1 h-4 w-4 inline" />
+                  Dashboard
+                </button>
+                <span className="board-page__breadcrumb-sep">/</span>
+                <span className="board-page__breadcrumb-current" style={{ color: 'var(--text-main)' }}>
+                  {trip.title}
+                </span>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setShareModalOpen(true)}>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Share
+              </Button>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setShareModalOpen(true)}>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              Share
-            </Button>
+            <h1 className="board-page__title">{trip.title}</h1>
+            <p className="board-page__subtitle">Board</p>
           </div>
-          <h1 className="board-page__title">{trip.title}</h1>
-          <p className="board-page__subtitle">Board</p>
         </div>
 
         <div className="board-page__content">
+          <div className="board-page__content-inner">
           {/* Add button */}
-          <div className="mb-6">
+          <div className="mb-6 board-page__actions">
             <Button onClick={() => setAddModalOpen(true)}>
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Add to Board
@@ -334,7 +337,10 @@ export function Board() {
                 <div className="board-add-modal__content">
                   <BoardPasteInput onParsed={(og) => { void handleParsed(og); setAddModalOpen(false); }} onNote={(text) => { void handleNote(text); setAddModalOpen(false); }} />
                   <ImageUpload
-                    onUpload={(file) => { void handleImageUpload(file).then(() => setAddModalOpen(false)); }}
+                    onUpload={async (file) => {
+                      await handleImageUpload(file);
+                      setAddModalOpen(false);
+                    }}
                     storageUsed={trip.storage_used_bytes ?? 0}
                     storageLimit={TRIP_STORAGE_LIMIT_BYTES}
                   />
@@ -418,22 +424,24 @@ export function Board() {
             onConfirm={() => setErrorMsg(null)}
             onCancel={() => setErrorMsg(null)}
           />
+          </div>
         </div>
       </div>
 
-      <button
-        type="button"
-        className="board-preview-toggle"
-        aria-label={previewOpen ? 'Hide preview' : previewItem ? 'Show preview' : 'Select a card to enable preview'}
-        data-open={previewOpen || undefined}
-        onClick={() => {
-          if (!previewItem) return;
-          setPreviewVisible(prev => !prev);
-        }}
-        disabled={!previewItem}
-      >
-        <ChevronRight className="board-preview-toggle__icon" />
-      </button>
+      {(previewOpen || previewItem) && (
+        <button
+          type="button"
+          className="board-preview-toggle"
+          aria-label={previewOpen ? 'Hide preview' : 'Show preview'}
+          data-open={previewOpen || undefined}
+          onClick={() => {
+            if (!previewItem) return;
+            setPreviewVisible(prev => !prev);
+          }}
+        >
+          <ChevronRight className="board-preview-toggle__icon" />
+        </button>
+      )}
 
       {shareModalOpen && id && (
         <ShareModal 

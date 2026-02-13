@@ -843,6 +843,11 @@ nav a:hover {
   max-width: 100%;
 }
 
+.board-page__header-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
 .board-page__header-top {
   display: flex;
   justify-content: space-between;
@@ -898,11 +903,21 @@ nav a:hover {
   max-width: 100%;
 }
 
+.board-page__content-inner {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.board-page__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Add to Board Modal */
 .board-add-modal__backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.28);
   display: grid;
   place-items: center;
   z-index: 50;
@@ -961,7 +976,7 @@ nav a:hover {
 
 .board-preview-toggle {
   position: fixed;
-  top: 50%;
+  top: 38%;
   right: 8px;
   transform: translateY(-50%);
   border: 1px solid var(--border-color);

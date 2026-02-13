@@ -260,7 +260,11 @@ function AuthedApp({ onLogout }: { onLogout: () => void }) {
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 p-4">
           <div className="flex items-center gap-4">
-            <div className="text-base font-semibold" style={{ color: 'var(--text-main)' }}>{t('app.title')}</div>
+            <img
+              src="/logo.svg"
+              alt={t('app.title')}
+              style={{ width: 28, height: 28, borderRadius: 8, display: 'block' }}
+            />
             {!isBoard && (
               <nav className="flex items-center gap-2">
                 <Link
