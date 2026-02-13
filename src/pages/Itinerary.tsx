@@ -161,6 +161,19 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
     );
   };
 
+  const ensureEntryForBoardItem = async (tripId: string, boardItemId: string, dayIndex: number) => {
+    const existing = entries.find((e) => e.board_item_id === boardItemId);
+    if (existing) return existing;
+
+    const { data } = await supabase
+      .from('itinerary_entries')
+      .insert({ trip_id: tripId, board_item_id: boardItemId, day_index: dayIndex, sort_order: 0 })
+      .select('*')
+      .single();
+
+    return (data as ItineraryEntry) ?? null;
+  };
+
   const handlePublishToggle = async () => {
     if (!id) return;
     setPublishing(true);
@@ -244,42 +257,31 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
     if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
   };
 
-  const onDropBeforeEntry = (dayIndex: number, beforeEntryId: string) => async (evt: React.DragEvent) => {
+  const onDropAtIndex = (dayIndex: number, insertIndex: number) => async (evt: React.DragEvent) => {
     evt.preventDefault();
     if (!id) return;
     const boardItemId = evt.dataTransfer.getData('text/board_item_id');
     if (!boardItemId) return;
 
-    const dayList = (entriesByDay.get(dayIndex) ?? []).slice();
-    const beforeIdx = dayList.findIndex((e) => e.id === beforeEntryId);
-    if (beforeIdx < 0) return;
+    const movedEntry = await ensureEntryForBoardItem(id, boardItemId, dayIndex);
+    if (!movedEntry) return;
 
-    const existing = entries.find((e) => e.board_item_id === boardItemId);
-    let movedEntryId: string;
+    const dayList = (entriesByDay.get(dayIndex) ?? []).slice().sort((a, b) => a.sort_order - b.sort_order);
+    const filtered = dayList.filter((e) => e.id !== movedEntry.id);
+    const clampedIndex = Math.max(0, Math.min(filtered.length, insertIndex));
+    const nextIds = filtered.slice(0, clampedIndex).map((e) => e.id).concat([movedEntry.id]).concat(filtered.slice(clampedIndex).map((e) => e.id));
 
-    if (!existing) {
-      const { data } = await supabase
-        .from('itinerary_entries')
-        .insert({ trip_id: id, board_item_id: boardItemId, day_index: dayIndex, sort_order: 0 })
-        .select('*')
-        .single();
-      if (!data) return;
-      movedEntryId = (data as ItineraryEntry).id;
-    } else {
-      movedEntryId = existing.id;
-    }
-
-    // Remove if already in this day list
-    const filtered = dayList.filter((e) => e.id !== movedEntryId);
-    const nextList = filtered.slice(0, beforeIdx).concat([{ ...(filtered[beforeIdx] ?? { id: movedEntryId }) } as any]).concat(filtered.slice(beforeIdx));
-
-    // Replace the inserted placeholder with movedEntryId
-    const normalizedIds = nextList.map((e: any) => (e.id === (filtered[beforeIdx] as any)?.id ? movedEntryId : e.id));
-
-    await supabase.from('itinerary_entries').update({ day_index: dayIndex }).eq('id', movedEntryId);
-    await normalizeDaySort(dayIndex, normalizedIds);
+    await supabase.from('itinerary_entries').update({ day_index: dayIndex }).eq('id', movedEntry.id);
+    await normalizeDaySort(dayIndex, nextIds);
     await refreshEntries();
 
+    if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
+  };
+
+  const removeFromDay = async (entryId: string) => {
+    if (!id) return;
+    await supabase.from('itinerary_entries').delete().eq('id', entryId).eq('trip_id', id);
+    await refreshEntries();
     if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
   };
 
@@ -478,39 +480,64 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {list.map((entry) => {
+                      <div
+                        className="rounded-lg"
+                        style={{ height: 10, borderRadius: 8, border: '1px dashed transparent' }}
+                        onDragOver={onDragOver}
+                        onDrop={(e) => void onDropAtIndex(dayIndex, 0)(e)}
+                      />
+
+                      {list.map((entry, entryIdx) => {
                         const b = boardById.get(entry.board_item_id);
                         if (!b) return null;
                         return (
-                          <div
-                            key={entry.id}
-                            className="rounded-xl p-3"
-                            style={{ border: '1px solid var(--border-color)', cursor: 'grab' }}
-                            draggable
-                            onDragStart={onDragStart(b.id, dayIndex)}
-                            onDragOver={onDragOver}
-                            onDrop={(e) => void onDropBeforeEntry(dayIndex, entry.id)(e)}
-                          >
-                            <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                              {b.title || '(untitled)'}
-                            </div>
-                            {b.description && (
-                              <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                                {b.description}
+                          <div key={entry.id}>
+                            <div
+                              className="rounded-xl p-3"
+                              style={{ border: '1px solid var(--border-color)', cursor: 'grab' }}
+                              draggable
+                              onDragStart={onDragStart(b.id, dayIndex)}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                                    {b.title || '(untitled)'}
+                                  </div>
+                                  {b.description && (
+                                    <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                      {b.description}
+                                    </div>
+                                  )}
+                                </div>
+                                <Button variant="secondary" size="sm" onClick={() => void removeFromDay(entry.id)}>
+                                  Remove
+                                </Button>
                               </div>
-                            )}
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              {b.url ? (
-                                <a href={b.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
-                                  Link
-                                </a>
-                              ) : (
-                                <span />
-                              )}
-                              <Button variant="secondary" size="sm" onClick={() => window.open(getGoogleMapsSearchUrl(b.title), '_blank')}>
-                                Open in Google Maps
-                              </Button>
+
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                {b.url ? (
+                                  <a href={b.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
+                                    Link
+                                  </a>
+                                ) : (
+                                  <span />
+                                )}
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => window.open(getGoogleMapsSearchUrl(b.title), '_blank')}
+                                >
+                                  Open in Google Maps
+                                </Button>
+                              </div>
                             </div>
+
+                            <div
+                              className="rounded-lg"
+                              style={{ height: 10, borderRadius: 8, border: '1px dashed transparent' }}
+                              onDragOver={onDragOver}
+                              onDrop={(e) => void onDropAtIndex(dayIndex, entryIdx + 1)(e)}
+                            />
                           </div>
                         );
                       })}
