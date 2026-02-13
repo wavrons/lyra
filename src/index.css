@@ -164,29 +164,6 @@ nav a:hover {
   animation: onboardFadeIn 800ms ease both;
 }
 
-.home-page__brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.home-page__logo {
-  width: 36px;
-  height: 36px;
-  display: block;
-}
-
-.home-page__wordmark {
-  font-family: 'IBM Plex Sans', var(--font-main);
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.06em;
-  text-transform: lowercase;
-  color: var(--accent);
-}
-
 .home-page__quote {
   margin: 0 0 48px;
   font-size: clamp(20px, 4vw, 28px);
