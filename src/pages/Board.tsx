@@ -48,6 +48,7 @@ export function Board() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewItem, setPreviewItem] = useState<BoardItem | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   const { stale, acknowledge } = useTripVersionPoll(id);
 
@@ -300,15 +301,39 @@ export function Board() {
         </div>
 
         <div className="board-page__content">
-          {/* Input area */}
-          <div className="mb-6 space-y-3">
-            <BoardPasteInput onParsed={handleParsed} onNote={handleNote} />
-            <ImageUpload
-              onUpload={handleImageUpload}
-              storageUsed={trip.storage_used_bytes ?? 0}
-              storageLimit={TRIP_STORAGE_LIMIT_BYTES}
-            />
+          {/* Add button */}
+          <div className="mb-6">
+            <Button onClick={() => setAddModalOpen(true)}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add to Board
+            </Button>
           </div>
+
+          {/* Add modal */}
+          {addModalOpen && (
+            <div className="board-add-modal__backdrop" onClick={() => setAddModalOpen(false)}>
+              <div className="board-add-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="board-add-modal__header">
+                  <h2 style={{ color: 'var(--text-main)' }}>Add to Board</h2>
+                  <button
+                    type="button"
+                    onClick={() => setAddModalOpen(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: 'var(--text-main)' }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="board-add-modal__content">
+                  <BoardPasteInput onParsed={(og) => { void handleParsed(og); setAddModalOpen(false); }} onNote={(text) => { void handleNote(text); setAddModalOpen(false); }} />
+                  <ImageUpload
+                    onUpload={(file) => { void handleImageUpload(file).then(() => setAddModalOpen(false)); }}
+                    storageUsed={trip.storage_used_bytes ?? 0}
+                    storageLimit={TRIP_STORAGE_LIMIT_BYTES}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Group-by toggle */}
           <div className="mb-6 flex items-center gap-1">
