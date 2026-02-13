@@ -12,6 +12,7 @@ import { Itinerary } from './pages/Itinerary';
 import { UpdatePassword } from './pages/UpdatePassword';
 import { Waitlist } from './pages/Waitlist';
 import { Account } from './pages/Account';
+import { Portal } from './pages/Portal';
 import { Board } from './pages/Board';
 import { Home } from './pages/Home';
 import { Onboarding } from './pages/Onboarding';
@@ -708,6 +709,7 @@ function App() {
             <Route path="/auth" element={<Auth onAuth={() => {}} />} />
             <Route path="/auth/update-password" element={<UpdatePassword />} />
             <Route path="/waitlist" element={<Waitlist />} />
+            <Route path="/v/:token" element={<Portal />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <Footer fixed />
