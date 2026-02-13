@@ -190,7 +190,7 @@ export function ShareModal({ tripId, onClose }: ShareModalProps) {
                     </Button>
                     <Button type="submit" size="sm" disabled={sharing} className="share-modal__submit">
                       <SFPersonBadgePlus size={16} className="mr-2" />
-                      {sharing ? 'Saving…' : 'Save'}
+                      {sharing ? 'Adding…' : 'Add'}
                     </Button>
                   </div>
                 </form>
