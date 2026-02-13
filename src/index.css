@@ -158,6 +158,15 @@ nav a:hover {
   overflow: hidden;
 }
 
+.home-page__corner-logo {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
 .home-page__content {
   text-align: center;
   padding: 32px;
