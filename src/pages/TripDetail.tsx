@@ -6,6 +6,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { RefreshBanner } from '../components/RefreshBanner';
 import { useTripVersionPoll } from '../hooks/useTripVersionPoll';
 import { supabase, type Trip, type TripFlight, type TripStay } from '../lib/supabase';
+import { lookupFlightByCode } from '../lib/amadeus';
 
 export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +33,8 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   const [savingLogistics, setSavingLogistics] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [flightLookupCode, setFlightLookupCode] = useState('');
+  const [lookingUpFlight, setLookingUpFlight] = useState(false);
 
   const { stale, acknowledge } = useTripVersionPoll(id);
 
@@ -197,6 +200,45 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
     setStays(stays.filter((s) => s.id !== stayId));
   };
 
+  const lookupFlightInfo = async (flightCode: string) => {
+    if (!flightCode.trim()) return;
+    setLookingUpFlight(true);
+    try {
+      const flightData = await lookupFlightByCode(flightCode);
+      if (!flightData) throw new Error('Flight not found or API not configured');
+      
+      if (!id) return;
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) return;
+
+      const nextSort = flights.length ? Math.max(...flights.map((f) => f.sort_order)) + 10 : 0;
+      const { data: newFlight, error } = await supabase
+        .from('trip_flights')
+        .insert({
+          trip_id: id,
+          user_id: userId,
+          flight_number: flightData.flightNumber || flightCode,
+          airline: flightData.airline || '',
+          status: flightData.status || '',
+          depart_airport: flightData.departAirport || '',
+          arrive_airport: flightData.arriveAirport || '',
+          confirmation_number: flightData.confirmationNumber || '',
+          sort_order: nextSort,
+        })
+        .select('*')
+        .single();
+      
+      if (error) throw error;
+      setFlights([...flights, newFlight as TripFlight]);
+      setFlightLookupCode('');
+    } catch (e: any) {
+      setErrorMsg(`Failed to lookup flight: ${e.message}`);
+    } finally {
+      setLookingUpFlight(false);
+    }
+  };
+
   if (loading) return null;
   if (!trip) return <div className="p-6">Trip not found</div>;
 
@@ -303,9 +345,17 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
             <div className="rounded-xl border p-5" style={{ background: 'transparent', borderColor: 'var(--border-color)' }}>
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>Flights</div>
-                <Button type="button" variant="secondary" size="sm" onClick={() => void addFlight()} disabled={savingLogistics}>
-                  Add Flight
-                </Button>
+                <div className="flex gap-2">
+                  <div className="flex gap-2">
+                    <Input value={flightLookupCode} onChange={(e) => setFlightLookupCode(e.target.value)} placeholder="Flight code (e.g., BR245)" style={{ width: '140px' }} />
+                    <Button type="button" variant="secondary" size="sm" onClick={() => void lookupFlightInfo(flightLookupCode)} disabled={lookingUpFlight || !flightLookupCode.trim()}>
+                      {lookingUpFlight ? 'Looking up...' : 'Lookup'}
+                    </Button>
+                  </div>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => void addFlight()} disabled={savingLogistics}>
+                    Add Flight
+                  </Button>
+                </div>
               </div>
               {flights.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
