@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.trip_portals (
   trip_id uuid NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
   created_by uuid NOT NULL REFERENCES auth.users(id),
   published boolean NOT NULL DEFAULT true,
+  show_receipts boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

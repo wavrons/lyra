@@ -2,13 +2,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { supabase, type BoardItem, type Trip, type TripItem } from '../lib/supabase';
+import { supabase, type BoardItem, type ItineraryEntry, type Trip, type TripAttachment } from '../lib/supabase';
 
 type PortalRow = {
   token: string;
   trip_id: string;
   published: boolean;
+  show_receipts?: boolean;
   created_at: string;
+};
+
+type SnapshotPayload = {
+  days: Array<{
+    label: string;
+    entries: Array<{ id: string; title: string; url?: string; description?: string }>;
+  }>;
+  receipts: Array<{ id: string; title: string; url: string; kind: string }>;
 };
 
 function makeToken(len = 12) {
@@ -30,17 +39,127 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [items, setItems] = useState<TripItem[]>([]);
   const [boardItems, setBoardItems] = useState<BoardItem[]>([]);
+  const [entries, setEntries] = useState<ItineraryEntry[]>([]);
+  const [attachments, setAttachments] = useState<TripAttachment[]>([]);
   const [portal, setPortal] = useState<PortalRow | null>(null);
+  const [showReceipts, setShowReceipts] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [flexDays, setFlexDays] = useState(7);
+  const [receiptDraft, setReceiptDraft] = useState({ title: '', url: '' });
 
   const portalUrl = useMemo(() => {
     if (!portal?.token) return '';
     const base = import.meta.env.BASE_URL || '/';
     return `${window.location.origin}${base}#/v/${portal.token}`;
   }, [portal?.token]);
+
+  const isFixedDates = !!trip?.start_date && !!trip?.end_date;
+
+  const dayCount = useMemo(() => {
+    if (!trip) return 0;
+    if (trip.start_date && trip.end_date) {
+      const start = new Date(trip.start_date);
+      const end = new Date(trip.end_date);
+      const ms = end.getTime() - start.getTime();
+      const days = Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+      return Math.max(1, days);
+    }
+    return Math.max(1, flexDays || 7);
+  }, [trip, flexDays]);
+
+  const dayLabels = useMemo(() => {
+    if (!trip) return [] as string[];
+    if (trip.start_date && trip.end_date) {
+      const start = new Date(trip.start_date);
+      const labels: string[] = [];
+      for (let i = 0; i < dayCount; i += 1) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        labels.push(d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
+      }
+      return labels;
+    }
+    return Array.from({ length: dayCount }, (_, i) => `Day ${i + 1}`);
+  }, [trip, dayCount]);
+
+  const boardById = useMemo(() => {
+    const m = new Map<string, BoardItem>();
+    for (const b of boardItems) m.set(b.id, b);
+    return m;
+  }, [boardItems]);
+
+  const scheduledIds = useMemo(() => new Set(entries.map((e) => e.board_item_id)), [entries]);
+
+  const unscheduled = useMemo(() => boardItems.filter((b) => !scheduledIds.has(b.id)), [boardItems, scheduledIds]);
+
+  const entriesByDay = useMemo(() => {
+    const m = new Map<number, ItineraryEntry[]>();
+    for (const e of entries) {
+      const list = m.get(e.day_index) ?? [];
+      list.push(e);
+      m.set(e.day_index, list);
+    }
+    for (const [k, list] of m.entries()) {
+      list.sort((a, b) => a.sort_order - b.sort_order);
+      m.set(k, list);
+    }
+    return m;
+  }, [entries]);
+
+  const buildSnapshotPayload = (): SnapshotPayload => {
+    const days = dayLabels.map((label, idx) => {
+      const dayIndex = idx + 1;
+      const list = entriesByDay.get(dayIndex) ?? [];
+      const mapped = list
+        .map((e) => {
+          const b = boardById.get(e.board_item_id);
+          if (!b) return null;
+          return {
+            id: b.id,
+            title: b.title || '(untitled)',
+            url: b.url,
+            description: b.description,
+          };
+        })
+        .filter(Boolean) as Array<{ id: string; title: string; url?: string; description?: string }>;
+      return { label, entries: mapped };
+    });
+
+    const receipts = attachments.map((a) => ({
+      id: a.id,
+      title: a.title,
+      url: a.url,
+      kind: a.kind,
+    }));
+
+    return { days, receipts };
+  };
+
+  const upsertSnapshot = async (token: string, tripTitle: string) => {
+    const payload = buildSnapshotPayload();
+    await supabase
+      .from('trip_portal_snapshots')
+      .upsert({ token, trip_title: tripTitle, payload }, { onConflict: 'token' });
+  };
+
+  const refreshEntries = async () => {
+    if (!id) return;
+    const { data } = await supabase.from('itinerary_entries').select('*').eq('trip_id', id);
+    setEntries((data as ItineraryEntry[]) ?? []);
+  };
+
+  const normalizeDaySort = async (dayIndex: number, orderedEntryIds: string[]) => {
+    await Promise.all(
+      orderedEntryIds.map((entryId, idx) =>
+        supabase
+          .from('itinerary_entries')
+          .update({ sort_order: idx * 10, day_index: dayIndex })
+          .eq('id', entryId)
+      )
+    );
+  };
 
   const handlePublishToggle = async () => {
     if (!id) return;
@@ -53,25 +172,120 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
         const token = makeToken(12);
         const { data, error } = await supabase
           .from('trip_portals')
-          .insert({ token, trip_id: id, created_by: userId, published: true })
+          .insert({ token, trip_id: id, created_by: userId, published: true, show_receipts: showReceipts })
           .select('token, trip_id, published, created_at')
           .single();
         if (error) throw error;
-        setPortal(data as PortalRow);
+        setPortal({ ...(data as PortalRow), show_receipts: showReceipts });
+        if (trip?.title) await upsertSnapshot(token, trip.title);
       } else {
         const next = !portal.published;
         const { data, error } = await supabase
           .from('trip_portals')
-          .update({ published: next })
+          .update({ published: next, show_receipts: showReceipts })
           .eq('token', portal.token)
           .select('token, trip_id, published, created_at')
           .single();
         if (error) throw error;
-        setPortal(data as PortalRow);
+        setPortal({ ...(data as PortalRow), show_receipts: showReceipts });
+        if (trip?.title && next) await upsertSnapshot(portal.token, trip.title);
       }
     } finally {
       setPublishing(false);
     }
+  };
+
+  const handleUpdateReceiptsVisibility = async (next: boolean) => {
+    setShowReceipts(next);
+    if (!portal?.token) return;
+    await supabase.from('trip_portals').update({ show_receipts: next }).eq('token', portal.token);
+    if (trip?.title) await upsertSnapshot(portal.token, trip.title);
+  };
+
+  const handleChangeFlexDays = async (next: number) => {
+    if (!id || !trip) return;
+    const clamped = Math.max(1, Math.min(60, next));
+    setFlexDays(clamped);
+    await supabase.from('trips').update({ flex_day_count: clamped }).eq('id', id);
+    if (clamped < dayCount) {
+      await supabase.from('itinerary_entries').delete().eq('trip_id', id).gt('day_index', clamped);
+      await refreshEntries();
+    }
+    if (portal?.published && portal.token && trip.title) await upsertSnapshot(portal.token, trip.title);
+  };
+
+  const onDragStart = (boardItemId: string, fromDay?: number) => (evt: React.DragEvent) => {
+    evt.dataTransfer.setData('text/board_item_id', boardItemId);
+    evt.dataTransfer.setData('text/from_day', fromDay ? String(fromDay) : '');
+    evt.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onDropToDay = (dayIndex: number) => async (evt: React.DragEvent) => {
+    evt.preventDefault();
+    if (!id) return;
+    const boardItemId = evt.dataTransfer.getData('text/board_item_id');
+    if (!boardItemId) return;
+    const targetList = entriesByDay.get(dayIndex) ?? [];
+    const nextSort = targetList.length ? Math.max(...targetList.map((e) => e.sort_order)) + 10 : 0;
+
+    const existing = entries.find((e) => e.board_item_id === boardItemId);
+    if (!existing) {
+      await supabase
+        .from('itinerary_entries')
+        .insert({ trip_id: id, board_item_id: boardItemId, day_index: dayIndex, sort_order: nextSort });
+    } else {
+      await supabase
+        .from('itinerary_entries')
+        .update({ day_index: dayIndex, sort_order: nextSort })
+        .eq('id', existing.id);
+    }
+
+    await refreshEntries();
+    if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
+  };
+
+  const onDropBeforeEntry = (dayIndex: number, beforeEntryId: string) => async (evt: React.DragEvent) => {
+    evt.preventDefault();
+    if (!id) return;
+    const boardItemId = evt.dataTransfer.getData('text/board_item_id');
+    if (!boardItemId) return;
+
+    const dayList = (entriesByDay.get(dayIndex) ?? []).slice();
+    const beforeIdx = dayList.findIndex((e) => e.id === beforeEntryId);
+    if (beforeIdx < 0) return;
+
+    const existing = entries.find((e) => e.board_item_id === boardItemId);
+    let movedEntryId: string;
+
+    if (!existing) {
+      const { data } = await supabase
+        .from('itinerary_entries')
+        .insert({ trip_id: id, board_item_id: boardItemId, day_index: dayIndex, sort_order: 0 })
+        .select('*')
+        .single();
+      if (!data) return;
+      movedEntryId = (data as ItineraryEntry).id;
+    } else {
+      movedEntryId = existing.id;
+    }
+
+    // Remove if already in this day list
+    const filtered = dayList.filter((e) => e.id !== movedEntryId);
+    const nextList = filtered.slice(0, beforeIdx).concat([{ ...(filtered[beforeIdx] ?? { id: movedEntryId }) } as any]).concat(filtered.slice(beforeIdx));
+
+    // Replace the inserted placeholder with movedEntryId
+    const normalizedIds = nextList.map((e: any) => (e.id === (filtered[beforeIdx] as any)?.id ? movedEntryId : e.id));
+
+    await supabase.from('itinerary_entries').update({ day_index: dayIndex }).eq('id', movedEntryId);
+    await normalizeDaySort(dayIndex, normalizedIds);
+    await refreshEntries();
+
+    if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
+  };
+
+  const onDragOver = (evt: React.DragEvent) => {
+    evt.preventDefault();
+    evt.dataTransfer.dropEffect = 'move';
   };
 
   const handleCopyPortalUrl = async () => {
@@ -86,30 +300,59 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
   useEffect(() => {
     (async () => {
       if (!id) {
-        setItems([]);
         setBoardItems([]);
+        setEntries([]);
+        setAttachments([]);
         setTrip(null);
         setPortal(null);
         setLoading(false);
         return;
       }
 
-      const [{ data: tripData }, { data: tripItems }, { data: bItems }, { data: portalData }] = await Promise.all([
+      const [{ data: tripData }, { data: bItems }, { data: entryData }, { data: portalData }, { data: attData }] = await Promise.all([
         supabase.from('trips').select('*').eq('id', id).maybeSingle(),
-        supabase.from('trip_items').select('*').eq('trip_id', id).order('created_at', { ascending: false }),
         supabase.from('board_items').select('*').eq('trip_id', id).order('created_at', { ascending: false }),
-        supabase.from('trip_portals').select('token, trip_id, published, created_at').eq('trip_id', id).order('created_at', { ascending: false }).limit(1),
+        supabase.from('itinerary_entries').select('*').eq('trip_id', id),
+        supabase.from('trip_portals').select('token, trip_id, published, show_receipts, created_at').eq('trip_id', id).order('created_at', { ascending: false }).limit(1),
+        supabase.from('trip_attachments').select('*').eq('trip_id', id).order('created_at', { ascending: false }),
       ]);
 
       setTrip((tripData as Trip) ?? null);
-      setItems((tripItems as TripItem[]) ?? []);
       setBoardItems((bItems as BoardItem[]) ?? []);
+      setEntries((entryData as ItineraryEntry[]) ?? []);
+      setAttachments((attData as TripAttachment[]) ?? []);
+
+      const flex = (tripData as any)?.flex_day_count;
+      if (typeof flex === 'number') setFlexDays(flex);
 
       const latestPortal = Array.isArray(portalData) && portalData.length ? portalData[0] : null;
       setPortal((latestPortal as PortalRow) ?? null);
+      setShowReceipts(!!(latestPortal as any)?.show_receipts);
       setLoading(false);
     })();
   }, [id]);
+
+  const addReceipt = async () => {
+    if (!id) return;
+    const title = receiptDraft.title.trim();
+    const url = receiptDraft.url.trim();
+    if (!url) return;
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+
+    const { data } = await supabase
+      .from('trip_attachments')
+      .insert({ trip_id: id, user_id: userId, title: title || 'Receipt', url, kind: 'receipt' })
+      .select('*')
+      .single();
+    if (data) {
+      setAttachments([data as TripAttachment, ...attachments]);
+      setReceiptDraft({ title: '', url: '' });
+      if (portal?.published && portal.token && trip?.title) await upsertSnapshot(portal.token, trip.title);
+    }
+  };
 
   if (loading) return null;
 
@@ -127,11 +370,31 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
               {trip.title}
             </div>
           )}
+          {!isFixedDates && (
+            <div className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+              <span>Days</span>
+              <Button variant="secondary" size="sm" onClick={() => void handleChangeFlexDays(flexDays - 1)}>
+                -
+              </Button>
+              <span style={{ minWidth: 24, textAlign: 'center' }}>{flexDays}</span>
+              <Button variant="secondary" size="sm" onClick={() => void handleChangeFlexDays(flexDays + 1)}>
+                +
+              </Button>
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           <Button variant="secondary" size="sm" disabled={publishing} onClick={() => void handlePublishToggle()}>
             {portal?.published ? 'Unpublish' : 'Publish'}
           </Button>
+          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span>Show receipts</span>
+            <input
+              type="checkbox"
+              checked={showReceipts}
+              onChange={(e) => void handleUpdateReceiptsVisibility(e.target.checked)}
+            />
+          </div>
           {portal?.published && portalUrl && (
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={() => void handleCopyPortalUrl()}>
@@ -157,14 +420,20 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
             Sandbox (Board)
           </div>
-          {boardItems.length === 0 ? (
+          {unscheduled.length === 0 ? (
             <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ background: 'transparent', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-              No board items yet.
+              No unscheduled items.
             </div>
           ) : (
             <div className="space-y-2">
-              {boardItems.map((b) => (
-                <div key={b.id} className="rounded-xl p-3" style={{ border: '1px solid var(--border-color)' }}>
+              {unscheduled.map((b) => (
+                <div
+                  key={b.id}
+                  className="rounded-xl p-3"
+                  style={{ border: '1px solid var(--border-color)', cursor: 'grab' }}
+                  draggable
+                  onDragStart={onDragStart(b.id)}
+                >
                   <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
                     {b.title || '(untitled)'}
                   </div>
@@ -186,49 +455,117 @@ export function Itinerary({ embedded }: { embedded?: boolean } = {}) {
 
         <div className="rounded-2xl p-4" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
           <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-            Timeline (POIs)
+            Timeline
           </div>
-          {items.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ background: 'transparent', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-              {t('itinerary.noPOIs')}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {items.map((item) => (
-                <div key={item.id} className="rounded-xl p-3" style={{ border: '1px solid var(--border-color)' }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>
-                        {item.country}
-                      </div>
-                      <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                        {item.name}
-                      </div>
-                      {item.notes && (
-                        <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {item.notes}
-                        </div>
-                      )}
+          <div className="space-y-3">
+            {dayLabels.map((label, idx) => {
+              const dayIndex = idx + 1;
+              const list = entriesByDay.get(dayIndex) ?? [];
+              return (
+                <section
+                  key={label}
+                  className="rounded-xl p-3"
+                  style={{ border: '1px dashed var(--border-color)' }}
+                  onDragOver={onDragOver}
+                  onDrop={(e) => void onDropToDay(dayIndex)(e)}
+                >
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                    {label}
+                  </div>
+                  {list.length === 0 ? (
+                    <div className="rounded-lg p-3 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Drop items here
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => window.open(getGoogleMapsSearchUrl(`${item.name} ${item.country}`), '_blank')}
-                      >
-                        Open in Google Maps
-                      </Button>
-                      {item.link && (
-                        <a href={item.link} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
-                          Link
-                        </a>
-                      )}
+                  ) : (
+                    <div className="space-y-2">
+                      {list.map((entry) => {
+                        const b = boardById.get(entry.board_item_id);
+                        if (!b) return null;
+                        return (
+                          <div
+                            key={entry.id}
+                            className="rounded-xl p-3"
+                            style={{ border: '1px solid var(--border-color)', cursor: 'grab' }}
+                            draggable
+                            onDragStart={onDragStart(b.id, dayIndex)}
+                            onDragOver={onDragOver}
+                            onDrop={(e) => void onDropBeforeEntry(dayIndex, entry.id)(e)}
+                          >
+                            <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                              {b.title || '(untitled)'}
+                            </div>
+                            {b.description && (
+                              <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {b.description}
+                              </div>
+                            )}
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              {b.url ? (
+                                <a href={b.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
+                                  Link
+                                </a>
+                              ) : (
+                                <span />
+                              )}
+                              <Button variant="secondary" size="sm" onClick={() => window.open(getGoogleMapsSearchUrl(b.title), '_blank')}>
+                                Open in Google Maps
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              Receipts (Document Vault)
+            </div>
+            <div className="mb-2 flex gap-2">
+              <input
+                className="w-full rounded-lg border px-2 py-1 text-sm"
+                style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }}
+                placeholder="Title (optional)"
+                value={receiptDraft.title}
+                onChange={(e) => setReceiptDraft({ ...receiptDraft, title: e.target.value })}
+              />
+              <input
+                className="w-full rounded-lg border px-2 py-1 text-sm"
+                style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }}
+                placeholder="Receipt URL"
+                value={receiptDraft.url}
+                onChange={(e) => setReceiptDraft({ ...receiptDraft, url: e.target.value })}
+              />
+              <Button size="sm" onClick={() => void addReceipt()}>
+                Add
+              </Button>
+            </div>
+            {attachments.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-4 text-center text-xs" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+                No receipts yet.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {attachments.map((a) => (
+                  <div key={a.id} className="rounded-xl p-3" style={{ border: '1px solid var(--border-color)' }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{a.title}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.kind}</div>
+                      </div>
+                      <a href={a.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
+                        View
+                      </a>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

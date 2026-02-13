@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase, type TripItem } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { Button } from '../components/Button';
 
 type PortalRow = {
   token: string;
-  trip_id: string;
   published: boolean;
+  show_receipts?: boolean;
   created_at: string;
+};
+
+type SnapshotPayload = {
+  days?: Array<{
+    label: string;
+    entries: Array<{ id: string; title: string; url?: string; description?: string }>;
+  }>;
+  receipts?: Array<{ id: string; title: string; url: string; kind: string }>;
 };
 
 function getGoogleMapsSearchUrl(query: string) {
@@ -18,7 +26,7 @@ export function Portal() {
   const { token } = useParams<{ token: string }>();
   const [portal, setPortal] = useState<PortalRow | null>(null);
   const [tripTitle, setTripTitle] = useState<string>('');
-  const [items, setItems] = useState<TripItem[]>([]);
+  const [payload, setPayload] = useState<SnapshotPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -35,13 +43,13 @@ export function Portal() {
 
       const { data: portalData, error: portalErr } = await supabase
         .from('trip_portals')
-        .select('token, trip_id, published, created_at')
+        .select('token, published, show_receipts, created_at')
         .eq('token', token)
         .maybeSingle();
 
       if (portalErr || !portalData || !portalData.published) {
         setPortal(null);
-        setItems([]);
+        setPayload(null);
         setTripTitle('');
         setLoading(false);
         setError('This link is invalid or unpublished.');
@@ -50,13 +58,14 @@ export function Portal() {
 
       setPortal(portalData as PortalRow);
 
-      const [{ data: tripData }, { data: tripItems }] = await Promise.all([
-        supabase.from('trips').select('title').eq('id', portalData.trip_id).maybeSingle(),
-        supabase.from('trip_items').select('*').eq('trip_id', portalData.trip_id).order('created_at', { ascending: false }),
-      ]);
+      const { data: snapData } = await supabase
+        .from('trip_portal_snapshots')
+        .select('trip_title, payload')
+        .eq('token', token)
+        .maybeSingle();
 
-      setTripTitle((tripData as any)?.title ?? 'Trip');
-      setItems((tripItems as TripItem[]) ?? []);
+      setTripTitle((snapData as any)?.trip_title ?? 'Trip');
+      setPayload(((snapData as any)?.payload as SnapshotPayload) ?? null);
       setLoading(false);
     })();
   }, [token]);
@@ -88,45 +97,70 @@ export function Portal() {
         <div className="rounded-xl border border-dashed p-8 text-center text-sm" style={{ background: 'var(--card-surface)', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
           {error}
         </div>
-      ) : items.length === 0 ? (
+      ) : !payload?.days?.length ? (
         <div className="rounded-xl border border-dashed p-8 text-center text-sm" style={{ background: 'var(--card-surface)', color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
           No stops yet.
         </div>
       ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="rounded-xl p-4 shadow-sm" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="mb-1 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>
-                    {item.country}
-                  </div>
-                  <div className="text-base font-semibold" style={{ color: 'var(--text-main)' }}>
-                    {item.name}
-                  </div>
-                  {item.notes && (
-                    <div className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-                      {item.notes}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => window.open(getGoogleMapsSearchUrl(`${item.name} ${item.country}`), '_blank')}
-                  >
-                    Open in Google Maps
-                  </Button>
-                  {item.link && (
-                    <a href={item.link} target="_blank" className="text-sm hover:underline" style={{ color: 'var(--accent)' }}>
-                      Link
-                    </a>
-                  )}
-                </div>
+        <div className="space-y-4">
+          {payload.days.map((day) => (
+            <section key={day.label}>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                {day.label}
               </div>
-            </div>
+              <div className="space-y-2">
+                {day.entries.map((e) => (
+                  <div key={e.id} className="rounded-xl p-4 shadow-sm" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-base font-semibold" style={{ color: 'var(--text-main)' }}>
+                          {e.title}
+                        </div>
+                        {e.description && (
+                          <div className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+                            {e.description}
+                          </div>
+                        )}
+                        {e.url && (
+                          <a href={e.url} target="_blank" className="mt-1 block text-sm hover:underline" style={{ color: 'var(--accent)' }}>
+                            Link
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <Button variant="secondary" size="sm" onClick={() => window.open(getGoogleMapsSearchUrl(e.title), '_blank')}>
+                          Open in Google Maps
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           ))}
+
+          {portal?.show_receipts && payload?.receipts?.length ? (
+            <section>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                Receipts
+              </div>
+              <div className="space-y-2">
+                {payload.receipts.map((r) => (
+                  <div key={r.id} className="rounded-xl p-4 shadow-sm" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{r.title || r.kind}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.kind}</div>
+                      </div>
+                      <a href={r.url} target="_blank" className="text-sm hover:underline" style={{ color: 'var(--accent)' }}>
+                        View
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       )}
 

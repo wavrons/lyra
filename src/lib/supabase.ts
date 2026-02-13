@@ -55,6 +55,7 @@ export type Trip = {
   title: string;
   start_date?: string;
   end_date?: string;
+  flex_day_count?: number;
   version: number;
   storage_used_bytes: number;
   created_at: string;
@@ -106,4 +107,23 @@ export type TripMember = {
   trip_id: string;
   user_email: string;
   role: 'viewer' | 'editor';
+};
+
+export type ItineraryEntry = {
+  id: string;
+  trip_id: string;
+  board_item_id: string;
+  day_index: number;
+  sort_order: number;
+  created_at: string;
+};
+
+export type TripAttachment = {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  title: string;
+  url: string;
+  kind: 'receipt' | 'ticket' | 'document';
+  created_at: string;
 };
