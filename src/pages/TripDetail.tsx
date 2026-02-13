@@ -5,7 +5,7 @@ import { Input } from '../components/Input';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { RefreshBanner } from '../components/RefreshBanner';
 import { useTripVersionPoll } from '../hooks/useTripVersionPoll';
-import { supabase, type Trip, type TripAttachment, type TripFlight, type TripStay } from '../lib/supabase';
+import { supabase, type Trip, type TripFlight, type TripStay } from '../lib/supabase';
 
 export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   const { id } = useParams<{ id: string }>();
@@ -27,8 +27,6 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
     transport_notes: '',
   });
   const [savingDetails, setSavingDetails] = useState(false);
-  const [attachments, setAttachments] = useState<TripAttachment[]>([]);
-  const [receiptDraft, setReceiptDraft] = useState({ title: '', url: '' });
   const [flights, setFlights] = useState<TripFlight[]>([]);
   const [stays, setStays] = useState<TripStay[]>([]);
   const [savingLogistics, setSavingLogistics] = useState(false);
@@ -48,13 +46,6 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
       
       if (tripError) throw tripError;
       setTrip(tripData);
-
-      const { data: attData } = await supabase
-        .from('trip_attachments')
-        .select('*')
-        .eq('trip_id', tripId)
-        .order('created_at', { ascending: false });
-      setAttachments((attData as TripAttachment[]) ?? []);
 
       const [{ data: flightData }, { data: stayData }] = await Promise.all([
         supabase.from('trip_flights').select('*').eq('trip_id', tripId).order('sort_order', { ascending: true }),
@@ -206,59 +197,6 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
     setStays(stays.filter((s) => s.id !== stayId));
   };
 
-  const updatePortalReceiptsSnapshot = async (tripId: string, tripTitle: string, nextAttachments: TripAttachment[]) => {
-    const { data: portalRows } = await supabase
-      .from('trip_portals')
-      .select('token, published')
-      .eq('trip_id', tripId)
-      .eq('published', true)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    const token = Array.isArray(portalRows) && portalRows.length ? (portalRows[0] as any).token : null;
-    if (!token) return;
-
-    const { data: snapData } = await supabase
-      .from('trip_portal_snapshots')
-      .select('trip_title, payload')
-      .eq('token', token)
-      .maybeSingle();
-
-    const prevPayload = (snapData as any)?.payload ?? {};
-    const receipts = nextAttachments.map((a) => ({ id: a.id, title: a.title, url: a.url, kind: a.kind }));
-    const nextPayload = { ...prevPayload, receipts };
-
-    await supabase
-      .from('trip_portal_snapshots')
-      .upsert({ token, trip_title: (snapData as any)?.trip_title ?? tripTitle, payload: nextPayload }, { onConflict: 'token' });
-  };
-
-  const addReceipt = async () => {
-    if (!id) return;
-    const title = receiptDraft.title.trim();
-    const url = receiptDraft.url.trim();
-    if (!url) return;
-
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) return;
-
-      const { data, error } = await supabase
-        .from('trip_attachments')
-        .insert({ trip_id: id, user_id: userId, title: title || 'Receipt', url, kind: 'receipt' })
-        .select('*')
-        .single();
-      if (error) throw error;
-
-      const next = [data as TripAttachment, ...attachments];
-      setAttachments(next);
-      setReceiptDraft({ title: '', url: '' });
-      if (trip?.title) await updatePortalReceiptsSnapshot(id, trip.title, next);
-    } catch (e) {
-      setErrorMsg('Failed to add receipt. You might only have viewer access.');
-    }
-  };
-
   if (loading) return null;
   if (!trip) return <div className="p-6">Trip not found</div>;
 
@@ -283,7 +221,7 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
         {/* Basic Info Section */}
         <div>
           <h2 className="vault-section__title">Basic Info</h2>
-          <div className="rounded-xl border p-5" style={{ background: 'var(--card-surface)', borderColor: 'var(--border-color)' }}>
+          <div className="rounded-xl border p-5" style={{ background: 'transparent', borderColor: 'var(--border-color)' }}>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>Cover Image URL</label>
@@ -362,7 +300,7 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
           <h2 className="vault-section__title">Logistics</h2>
           <div className="space-y-8">
             {/* Flights */}
-            <div className="rounded-xl border p-5" style={{ background: 'var(--card-surface)', borderColor: 'var(--border-color)' }}>
+            <div className="rounded-xl border p-5" style={{ background: 'transparent', borderColor: 'var(--border-color)' }}>
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>Flights</div>
                 <Button type="button" variant="secondary" size="sm" onClick={() => void addFlight()} disabled={savingLogistics}>
@@ -395,7 +333,7 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
             </div>
 
             {/* Stays */}
-            <div className="rounded-xl border p-5" style={{ background: 'var(--card-surface)', borderColor: 'var(--border-color)' }}>
+            <div className="rounded-xl border p-5" style={{ background: 'transparent', borderColor: 'var(--border-color)' }}>
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>Stays</div>
                 <Button type="button" variant="secondary" size="sm" onClick={() => void addStay()} disabled={savingLogistics}>
@@ -427,7 +365,7 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
             </div>
 
             {/* Transport */}
-            <div className="rounded-xl border p-5" style={{ background: 'var(--card-surface)', borderColor: 'var(--border-color)' }}>
+            <div className="rounded-xl border p-5" style={{ background: 'transparent', borderColor: 'var(--border-color)' }}>
               <div className="mb-4 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--accent)' }}>Transport</div>
               <textarea className="w-full rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }} rows={4} value={detailsDraft.transport_notes} onChange={(e) => setDetailsDraft({ ...detailsDraft, transport_notes: e.target.value })} placeholder="Train passes, car rental, notes..." />
               <div className="mt-3">
@@ -439,39 +377,6 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
           </div>
         </div>
 
-        {/* Document Vault Section */}
-        <section>
-          <h2 className="vault-section__title">Document Vault</h2>
-          <div className="rounded-xl border p-5" style={{ background: 'var(--card-surface)', borderColor: 'var(--border-color)' }}>
-            <div className="mb-3 flex gap-2">
-              <Input value={receiptDraft.title} onChange={(e) => setReceiptDraft({ ...receiptDraft, title: e.target.value })} placeholder="Title (optional)" />
-              <Input value={receiptDraft.url} onChange={(e) => setReceiptDraft({ ...receiptDraft, url: e.target.value })} placeholder="Receipt URL" />
-              <Button type="button" onClick={() => void addReceipt()}>Add</Button>
-            </div>
-
-            {attachments.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-                No receipts yet.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {attachments.map((a) => (
-                  <div key={a.id} className="rounded-xl p-3" style={{ background: 'transparent', border: '1px solid var(--border-color)' }}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{a.title}</div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.kind}</div>
-                      </div>
-                      <a href={a.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
-                        View
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
 
       <ConfirmModal
