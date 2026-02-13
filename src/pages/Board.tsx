@@ -9,7 +9,6 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ShareModal } from '../components/ShareModal';
 import { useTripVersionPoll } from '../hooks/useTripVersionPoll';
 import { supabase, type Trip, type BoardItem, type ColorTag } from '../lib/supabase';
-import { TRIP_STORAGE_LIMIT_BYTES } from '../config';
 import type { OGData } from '../lib/ogParse';
 
 // Inline icon components (SF-style)
@@ -349,7 +348,7 @@ export function Board({ embedded }: { embedded?: boolean } = {}) {
                       setAddModalOpen(false);
                     }}
                     storageUsed={trip.storage_used_bytes ?? 0}
-                    storageLimit={TRIP_STORAGE_LIMIT_BYTES}
+                    storageLimit={100 * 1024 * 1024}
                   />
                 </div>
               </div>
