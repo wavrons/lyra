@@ -5,7 +5,7 @@ import { Input } from '../components/Input';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { RefreshBanner } from '../components/RefreshBanner';
 import { useTripVersionPoll } from '../hooks/useTripVersionPoll';
-import { supabase, type Trip, type TripAttachment } from '../lib/supabase';
+import { supabase, type Trip, type TripAttachment, type TripFlight, type TripStay } from '../lib/supabase';
 
 export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +29,9 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
   const [savingDetails, setSavingDetails] = useState(false);
   const [attachments, setAttachments] = useState<TripAttachment[]>([]);
   const [receiptDraft, setReceiptDraft] = useState({ title: '', url: '' });
+  const [flights, setFlights] = useState<TripFlight[]>([]);
+  const [stays, setStays] = useState<TripStay[]>([]);
+  const [savingLogistics, setSavingLogistics] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -52,6 +55,13 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
         .eq('trip_id', tripId)
         .order('created_at', { ascending: false });
       setAttachments((attData as TripAttachment[]) ?? []);
+
+      const [{ data: flightData }, { data: stayData }] = await Promise.all([
+        supabase.from('trip_flights').select('*').eq('trip_id', tripId).order('sort_order', { ascending: true }),
+        supabase.from('trip_stays').select('*').eq('trip_id', tripId).order('sort_order', { ascending: true }),
+      ]);
+      setFlights((flightData as TripFlight[]) ?? []);
+      setStays((stayData as TripStay[]) ?? []);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -99,12 +109,6 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
       const payload: Record<string, any> = {
         cover_image_url: detailsDraft.cover_image_url || null,
         date_mode: detailsDraft.date_mode,
-        flight_number: detailsDraft.flight_number || null,
-        flight_airline: detailsDraft.flight_airline || null,
-        flight_status: detailsDraft.flight_status || null,
-        stay_name: detailsDraft.stay_name || null,
-        stay_address: detailsDraft.stay_address || null,
-        stay_checkin_time: detailsDraft.stay_checkin_time || null,
         transport_notes: detailsDraft.transport_notes || null,
       };
 
@@ -132,6 +136,74 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
     } finally {
       setSavingDetails(false);
     }
+  };
+
+  const addFlight = async () => {
+    if (!id) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+    setSavingLogistics(true);
+    try {
+      const nextSort = flights.length ? Math.max(...flights.map((f) => f.sort_order)) + 10 : 0;
+      const { data, error } = await supabase
+        .from('trip_flights')
+        .insert({ trip_id: id, user_id: userId, sort_order: nextSort })
+        .select('*')
+        .single();
+      if (error) throw error;
+      setFlights([...flights, data as TripFlight]);
+    } finally {
+      setSavingLogistics(false);
+    }
+  };
+
+  const addStay = async () => {
+    if (!id) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+    setSavingLogistics(true);
+    try {
+      const nextSort = stays.length ? Math.max(...stays.map((s) => s.sort_order)) + 10 : 0;
+      const { data, error } = await supabase
+        .from('trip_stays')
+        .insert({ trip_id: id, user_id: userId, sort_order: nextSort })
+        .select('*')
+        .single();
+      if (error) throw error;
+      setStays([...stays, data as TripStay]);
+    } finally {
+      setSavingLogistics(false);
+    }
+  };
+
+  const updateFlight = async (flightId: string, patch: Partial<TripFlight>) => {
+    if (!id) return;
+    const { data, error } = await supabase.from('trip_flights').update(patch).eq('id', flightId).eq('trip_id', id).select('*').single();
+    if (!error && data) {
+      setFlights(flights.map((f) => (f.id === flightId ? (data as TripFlight) : f)));
+    }
+  };
+
+  const updateStay = async (stayId: string, patch: Partial<TripStay>) => {
+    if (!id) return;
+    const { data, error } = await supabase.from('trip_stays').update(patch).eq('id', stayId).eq('trip_id', id).select('*').single();
+    if (!error && data) {
+      setStays(stays.map((s) => (s.id === stayId ? (data as TripStay) : s)));
+    }
+  };
+
+  const deleteFlight = async (flightId: string) => {
+    if (!id) return;
+    await supabase.from('trip_flights').delete().eq('id', flightId).eq('trip_id', id);
+    setFlights(flights.filter((f) => f.id !== flightId));
+  };
+
+  const deleteStay = async (stayId: string) => {
+    if (!id) return;
+    await supabase.from('trip_stays').delete().eq('id', stayId).eq('trip_id', id);
+    setStays(stays.filter((s) => s.id !== stayId));
   };
 
   const updatePortalReceiptsSnapshot = async (tripId: string, tripTitle: string, nextAttachments: TripAttachment[]) => {
@@ -209,10 +281,8 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
 
       <div className="space-y-6">
         <div>
-          <h2 className="mb-3 font-semibold" style={{ color: 'var(--accent)', fontSize: 18 }}>
-            Basic Info
-          </h2>
-          <div className="rounded-xl p-5" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+          <h2 className="vault-section__title">Basic Info</h2>
+          <div className="vault-section__body">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <label className="mb-1 block text-sm font-medium">Cover Image URL</label>
@@ -287,79 +357,140 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
         </div>
 
         <div>
-          <h2 className="mb-3 font-semibold" style={{ color: 'var(--accent)', fontSize: 18 }}>
-            Logistics
-          </h2>
-          <div className="rounded-xl p-5" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
-            <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl p-4" style={{ background: 'transparent', border: 'none' }}>
-              <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Flight</div>
-              <div className="space-y-2">
-                <Input
-                  value={detailsDraft.flight_number}
-                  onChange={(e) => setDetailsDraft({ ...detailsDraft, flight_number: e.target.value })}
-                  placeholder="Flight #"
-                />
-                <Input
-                  value={detailsDraft.flight_airline}
-                  onChange={(e) => setDetailsDraft({ ...detailsDraft, flight_airline: e.target.value })}
-                  placeholder="Airline"
-                />
-                <Input
-                  value={detailsDraft.flight_status}
-                  onChange={(e) => setDetailsDraft({ ...detailsDraft, flight_status: e.target.value })}
-                  placeholder="Status"
-                />
+          <h2 className="vault-section__title">Logistics</h2>
+          <div className="vault-section__body">
+            <div className="flex items-center justify-between gap-2" style={{ marginBottom: 12 }}>
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Flights</div>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void addFlight()} disabled={savingLogistics}>
+                Add Flight
+              </Button>
+            </div>
+
+            {flights.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-4 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+                No flights yet.
               </div>
-            </div>
-
-            <div className="rounded-xl p-4" style={{ background: 'transparent', border: 'none' }}>
-              <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Stay</div>
-              <div className="space-y-2">
-                <Input
-                  value={detailsDraft.stay_name}
-                  onChange={(e) => setDetailsDraft({ ...detailsDraft, stay_name: e.target.value })}
-                  placeholder="Hotel"
-                />
-                <Input
-                  value={detailsDraft.stay_address}
-                  onChange={(e) => setDetailsDraft({ ...detailsDraft, stay_address: e.target.value })}
-                  placeholder="Address"
-                />
-                <Input
-                  value={detailsDraft.stay_checkin_time}
-                  onChange={(e) => setDetailsDraft({ ...detailsDraft, stay_checkin_time: e.target.value })}
-                  placeholder="Check-in time"
-                />
+            ) : (
+              <div className="space-y-3" style={{ marginBottom: 20 }}>
+                {flights.map((f) => (
+                  <div key={f.id} className="rounded-xl p-4" style={{ border: '1px solid var(--border-color)' }}>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Input
+                        value={f.flight_number ?? ''}
+                        onChange={(e) => void updateFlight(f.id, { flight_number: e.target.value })}
+                        placeholder="Flight #"
+                      />
+                      <Input
+                        value={f.airline ?? ''}
+                        onChange={(e) => void updateFlight(f.id, { airline: e.target.value })}
+                        placeholder="Airline"
+                      />
+                      <Input
+                        value={f.status ?? ''}
+                        onChange={(e) => void updateFlight(f.id, { status: e.target.value })}
+                        placeholder="Status"
+                      />
+                      <Input
+                        value={f.depart_airport ?? ''}
+                        onChange={(e) => void updateFlight(f.id, { depart_airport: e.target.value })}
+                        placeholder="From (airport)"
+                      />
+                      <Input
+                        value={f.arrive_airport ?? ''}
+                        onChange={(e) => void updateFlight(f.id, { arrive_airport: e.target.value })}
+                        placeholder="To (airport)"
+                      />
+                      <Input
+                        value={f.confirmation_number ?? ''}
+                        onChange={(e) => void updateFlight(f.id, { confirmation_number: e.target.value })}
+                        placeholder="Confirmation #"
+                      />
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => void deleteFlight(f.id)}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
+            )}
+
+            <div className="flex items-center justify-between gap-2" style={{ marginBottom: 12 }}>
+              <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Stays</div>
+              <Button type="button" variant="secondary" size="sm" onClick={() => void addStay()} disabled={savingLogistics}>
+                Add Stay
+              </Button>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: 'transparent', border: 'none' }}>
-              <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Transport</div>
-              <textarea
-                className="w-full rounded-lg border p-2 text-sm"
-                style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }}
-                rows={6}
-                value={detailsDraft.transport_notes}
-                onChange={(e) => setDetailsDraft({ ...detailsDraft, transport_notes: e.target.value })}
-                placeholder="Train passes, car rental, notes..."
-              />
-            </div>
-          </div>
+            {stays.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-4 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+                No stays yet.
+              </div>
+            ) : (
+              <div className="space-y-3" style={{ marginBottom: 20 }}>
+                {stays.map((s) => (
+                  <div key={s.id} className="rounded-xl p-4" style={{ border: '1px solid var(--border-color)' }}>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Input
+                        value={s.name ?? ''}
+                        onChange={(e) => void updateStay(s.id, { name: e.target.value })}
+                        placeholder="Hotel / Stay name"
+                      />
+                      <Input
+                        value={s.check_in_time ?? ''}
+                        onChange={(e) => void updateStay(s.id, { check_in_time: e.target.value })}
+                        placeholder="Check-in time"
+                      />
+                      <Input
+                        value={s.address ?? ''}
+                        onChange={(e) => void updateStay(s.id, { address: e.target.value })}
+                        placeholder="Address"
+                      />
+                      <Input
+                        value={s.check_out_time ?? ''}
+                        onChange={(e) => void updateStay(s.id, { check_out_time: e.target.value })}
+                        placeholder="Check-out time"
+                      />
+                      <Input
+                        value={s.confirmation_number ?? ''}
+                        onChange={(e) => void updateStay(s.id, { confirmation_number: e.target.value })}
+                        placeholder="Confirmation #"
+                      />
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => void deleteStay(s.id)}>
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-          <div className="mt-4">
-            <Button type="button" variant="secondary" size="sm" onClick={() => void saveDetails()} disabled={savingDetails}>
-              {savingDetails ? 'Saving...' : 'Save Logistics'}
-            </Button>
-          </div>
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)', marginBottom: 8 }}>
+              Transport
+            </div>
+            <textarea
+              className="w-full rounded-lg border p-2 text-sm"
+              style={{ borderColor: 'var(--border-color)', background: 'var(--input-surface, var(--card-surface))', color: 'var(--text-main)' }}
+              rows={4}
+              value={detailsDraft.transport_notes}
+              onChange={(e) => setDetailsDraft({ ...detailsDraft, transport_notes: e.target.value })}
+              placeholder="Train passes, car rental, notes..."
+            />
+
+            <div className="mt-4">
+              <Button type="button" variant="secondary" size="sm" onClick={() => void saveDetails()} disabled={savingDetails}>
+                {savingDetails ? 'Saving...' : 'Save Transport Notes'}
+              </Button>
+            </div>
           </div>
         </div>
 
         <section>
-          <h2 className="mb-3 font-semibold" style={{ color: 'var(--accent)', fontSize: 18 }}>
-            Document Vault
-          </h2>
-          <div className="rounded-xl p-5" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+          <h2 className="vault-section__title">Document Vault</h2>
+          <div className="vault-section__body">
             <div className="mb-3 flex gap-2">
               <Input
                 value={receiptDraft.title}
@@ -399,10 +530,6 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
             )}
           </div>
         </section>
-
-        <div className="rounded-xl border border-dashed p-12 text-center" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-          POIs are managed in Board / Itinerary.
-        </div>
       </div>
 
       <ConfirmModal

@@ -1694,6 +1694,20 @@ nav a:hover {
   padding: 0;
 }
 
+.vault-section__title {
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.vault-section__body {
+  border-radius: var(--radius-card);
+  padding: 20px;
+  background: var(--card-surface);
+  border: 1px solid var(--border-color);
+}
+
 .public-portal {
   background-color: var(--bg-surface);
   color: var(--text-main);

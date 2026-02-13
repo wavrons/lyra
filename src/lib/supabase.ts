@@ -137,3 +137,34 @@ export type TripAttachment = {
   kind: 'receipt' | 'ticket' | 'document';
   created_at: string;
 };
+
+export type TripFlight = {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  flight_number?: string;
+  airline?: string;
+  status?: string;
+  depart_airport?: string;
+  arrive_airport?: string;
+  depart_time?: string;
+  arrive_time?: string;
+  confirmation_number?: string;
+  notes?: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type TripStay = {
+  id: string;
+  trip_id: string;
+  user_id: string;
+  name?: string;
+  address?: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  confirmation_number?: string;
+  notes?: string;
+  sort_order: number;
+  created_at: string;
+};
