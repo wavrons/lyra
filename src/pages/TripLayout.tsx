@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { supabase, type Trip } from '../lib/supabase';
+import { Button } from '../components/Button';
 
 export function TripLayout() {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const [trip, setTrip] = useState<Trip | null>(null);
 
   useEffect(() => {
@@ -23,13 +25,6 @@ export function TripLayout() {
     <div className="mx-auto max-w-6xl p-6">
       <div className="account-layout">
         <aside className="account-sidebar">
-          <Link
-            to="/dashboard"
-            className="account-tab"
-            style={{ marginBottom: 8, justifyContent: 'center' }}
-          >
-            <span>Back to Dashboard</span>
-          </Link>
           <h1 className="account-title" style={{ color: 'var(--text-main)' }}>
             {trip?.title ?? 'Trip'}
           </h1>
@@ -50,6 +45,11 @@ export function TripLayout() {
         </aside>
 
         <div className={`account-content ${isBoard ? 'trip-content--board' : ''}`}>
+          <div style={{ marginBottom: 16 }}>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
+            </Button>
+          </div>
           <Outlet />
         </div>
       </div>
