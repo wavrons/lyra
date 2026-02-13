@@ -977,7 +977,7 @@ nav a:hover {
 .board-preview-toggle {
   position: fixed;
   top: 38%;
-  right: 8px;
+  right: -18px;
   transform: translateY(-50%);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-control);
@@ -999,7 +999,7 @@ nav a:hover {
 }
 
 .board-preview-toggle[data-open] {
-  right: calc(var(--preview-panel-width) + 8px);
+  right: calc(var(--preview-panel-width) - 18px);
 }
 
 .board-preview-toggle[data-open] .board-preview-toggle__icon {
