@@ -335,8 +335,10 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       <div className="space-y-6">
-        <section>
-          <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Trip Meta</h2>
+        <div>
+          <h2 className="mb-3 font-semibold" style={{ color: 'var(--accent)', fontSize: 18 }}>
+            Basic Info
+          </h2>
           <div className="rounded-xl p-5" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="md:col-span-2">
@@ -409,12 +411,15 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
               </Button>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section>
-          <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Logistics</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl p-4" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+        <div>
+          <h2 className="mb-3 font-semibold" style={{ color: 'var(--accent)', fontSize: 18 }}>
+            Logistics
+          </h2>
+          <div className="rounded-xl p-5" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+            <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl p-4" style={{ background: 'transparent', border: 'none' }}>
               <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Flight</div>
               <div className="space-y-2">
                 <Input
@@ -435,7 +440,7 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
               </div>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+            <div className="rounded-xl p-4" style={{ background: 'transparent', border: 'none' }}>
               <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Stay</div>
               <div className="space-y-2">
                 <Input
@@ -456,7 +461,7 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
               </div>
             </div>
 
-            <div className="rounded-xl p-4" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+            <div className="rounded-xl p-4" style={{ background: 'transparent', border: 'none' }}>
               <div className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Transport</div>
               <textarea
                 className="w-full rounded-lg border p-2 text-sm"
@@ -474,47 +479,52 @@ export function TripDetail({ embedded }: { embedded?: boolean } = {}) {
               {savingDetails ? 'Saving...' : 'Save Logistics'}
             </Button>
           </div>
-        </section>
+          </div>
+        </div>
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-muted)' }}>Document Vault</h2>
-          <div className="mb-3 flex gap-2">
-            <Input
-              value={receiptDraft.title}
-              onChange={(e) => setReceiptDraft({ ...receiptDraft, title: e.target.value })}
-              placeholder="Title (optional)"
-            />
-            <Input
-              value={receiptDraft.url}
-              onChange={(e) => setReceiptDraft({ ...receiptDraft, url: e.target.value })}
-              placeholder="Receipt URL"
-            />
-            <Button type="button" onClick={() => void addReceipt()}>
-              Add
-            </Button>
-          </div>
+          <h2 className="mb-3 font-semibold" style={{ color: 'var(--accent)', fontSize: 18 }}>
+            Document Vault
+          </h2>
+          <div className="rounded-xl p-5" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
+            <div className="mb-3 flex gap-2">
+              <Input
+                value={receiptDraft.title}
+                onChange={(e) => setReceiptDraft({ ...receiptDraft, title: e.target.value })}
+                placeholder="Title (optional)"
+              />
+              <Input
+                value={receiptDraft.url}
+                onChange={(e) => setReceiptDraft({ ...receiptDraft, url: e.target.value })}
+                placeholder="Receipt URL"
+              />
+              <Button type="button" onClick={() => void addReceipt()}>
+                Add
+              </Button>
+            </div>
 
-          {attachments.length === 0 ? (
-            <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
-              No receipts yet.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {attachments.map((a) => (
-                <div key={a.id} className="rounded-xl p-3" style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{a.title}</div>
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.kind}</div>
+            {attachments.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-6 text-center text-sm" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>
+                No receipts yet.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {attachments.map((a) => (
+                  <div key={a.id} className="rounded-xl p-3" style={{ background: 'transparent', border: '1px solid var(--border-color)' }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{a.title}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.kind}</div>
+                      </div>
+                      <a href={a.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
+                        View
+                      </a>
                     </div>
-                    <a href={a.url} target="_blank" className="text-xs hover:underline" style={{ color: 'var(--accent)' }}>
-                      View
-                    </a>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         {grouped.map(([country, items]) => (
